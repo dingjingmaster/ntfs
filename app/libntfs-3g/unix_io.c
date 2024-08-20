@@ -64,11 +64,11 @@
 #include "logging.h"
 #include "misc.h"
 
-#define DEV_FD(dev)	(*(int *)dev->d_private)
+#define DEV_FD(dev)    (*(int *)dev->d_private)
 
 /* Define to nothing if not present on this system. */
 #ifndef O_EXCL
-#	define O_EXCL 0
+#    define O_EXCL 0
 #endif
 
 /**
@@ -81,28 +81,28 @@
  */
 static int ntfs_fsync(int fildes)
 {
-	int ret = -1;
+    int ret = -1;
 #if defined(__APPLE__) || defined(__DARWIN__)
 # ifndef F_FULLFSYNC
 #  error "Mac OS X: F_FULLFSYNC is not defined. Either you didn't include fcntl.h or you're using an older, unsupported version of Mac OS X (pre-10.3)."
 # endif
-	/* 
-	 * Apple has disabled fsync() for internal disk drives in OS X.
-	 * To force a synchronization of disk contents, we use a Mac OS X
-	 * specific fcntl, F_FULLFSYNC. 
-	 */
-	ret = fcntl(fildes, F_FULLFSYNC, NULL);
-	if (ret) {
-		/* 
-		 * If we are not on a file system that supports this,
-		 * then fall back to a plain fsync. 
-		 */
-		ret = fsync(fildes);
-	}
+    /*
+     * Apple has disabled fsync() for internal disk drives in OS X.
+     * To force a synchronization of disk contents, we use a Mac OS X
+     * specific fcntl, F_FULLFSYNC.
+     */
+    ret = fcntl(fildes, F_FULLFSYNC, NULL);
+    if (ret) {
+        /*
+         * If we are not on a file system that supports this,
+         * then fall back to a plain fsync.
+         */
+        ret = fsync(fildes);
+    }
 #else
-	ret = fsync(fildes);
+    ret = fsync(fildes);
 #endif
-	return ret;
+    return ret;
 }
 
 /**
@@ -116,80 +116,79 @@ static int ntfs_fsync(int fildes)
  */
 static int ntfs_device_unix_io_open(struct ntfs_device *dev, int flags)
 {
-	struct flock flk;
-	struct stat sbuf;
-	int err;
+    struct flock flk;
+    struct stat sbuf;
+    int err;
 
-	if (NDevOpen(dev)) {
-		errno = EBUSY;
-		return -1;
-	}
-	if (stat(dev->d_name, &sbuf)) {
-		ntfs_log_perror("Failed to access '%s'", dev->d_name);
-		return -1;
-	}
-	if (S_ISBLK(sbuf.st_mode))
-		NDevSetBlock(dev);
-	
-	dev->d_private = ntfs_malloc(sizeof(int));
-	if (!dev->d_private)
-		return -1;
-	/*
-	 * Open file for exclusive access if mounting r/w.
-	 * Fuseblk takes care about block devices.
-	 */ 
-	if (!NDevBlock(dev) && (flags & O_RDWR) == O_RDWR)
-		flags |= O_EXCL;
-	*(int*)dev->d_private = open(dev->d_name, flags);
-	if (*(int*)dev->d_private == -1) {
-		err = errno;
-			/* if permission error and rw, retry read-only */
-		if ((err == EACCES) && ((flags & O_RDWR) == O_RDWR))
-			err = EROFS;
-		goto err_out;
-	}
+    if (NDevOpen(dev)) {
+        errno = EBUSY;
+        return -1;
+    }
+    if (stat(dev->d_name, &sbuf)) {
+        ntfs_log_perror("Failed to access '%s'", dev->d_name);
+        return -1;
+    }
+    if (S_ISBLK(sbuf.st_mode))
+        NDevSetBlock(dev);
+
+    dev->d_private = ntfs_malloc(sizeof(int));
+    if (!dev->d_private)
+        return -1;
+    /*
+     * Open file for exclusive access if mounting r/w.
+     * Fuseblk takes care about block devices.
+     */
+    if (!NDevBlock(dev) && (flags & O_RDWR) == O_RDWR)
+        flags |= O_EXCL;
+    *(int*)dev->d_private = open(dev->d_name, flags);
+    if (*(int*)dev->d_private == -1) {
+        err = errno;
+            /* if permission error and rw, retry read-only */
+        if ((err == EACCES) && ((flags & O_RDWR) == O_RDWR))
+            err = EROFS;
+        goto err_out;
+    }
 #ifdef HAVE_LINUX_FS_H
-		/* Check whether the device was forced read-only */
-	if (NDevBlock(dev) && ((flags & O_RDWR) == O_RDWR)) {
-		int r;
-		int state;
+        /* Check whether the device was forced read-only */
+    if (NDevBlock(dev) && ((flags & O_RDWR) == O_RDWR)) {
+        int r;
+        int state;
 
-		r = ioctl(DEV_FD(dev), BLKROGET, &state);
-		if (!r && state) {
-			err = EROFS;
-			if (close(DEV_FD(dev)))
-				err = errno;
-			goto err_out;
-   		}
-	}
+        r = ioctl(DEV_FD(dev), BLKROGET, &state);
+        if (!r && state) {
+            err = EROFS;
+            if (close(DEV_FD(dev)))
+                err = errno;
+            goto err_out;
+           }
+    }
 #endif
-	
-	if ((flags & O_RDWR) != O_RDWR)
-		NDevSetReadOnly(dev);
-	
-	memset(&flk, 0, sizeof(flk));
-	if (NDevReadOnly(dev))
-		flk.l_type = F_RDLCK;
-	else
-		flk.l_type = F_WRLCK;
-	flk.l_whence = SEEK_SET;
-	flk.l_start = flk.l_len = 0LL;
-	if (fcntl(DEV_FD(dev), F_SETLK, &flk)) {
-		err = errno;
-		ntfs_log_perror("Failed to %s lock '%s'", NDevReadOnly(dev) ? 
-				"read" : "write", dev->d_name);
-		if (close(DEV_FD(dev)))
-			ntfs_log_perror("Failed to close '%s'", dev->d_name);
-		goto err_out;
-	}
-	
-	NDevSetOpen(dev);
-	return 0;
+
+    if ((flags & O_RDWR) != O_RDWR)
+        NDevSetReadOnly(dev);
+
+    memset(&flk, 0, sizeof(flk));
+    if (NDevReadOnly(dev))
+        flk.l_type = F_RDLCK;
+    else
+        flk.l_type = F_WRLCK;
+    flk.l_whence = SEEK_SET;
+    flk.l_start = flk.l_len = 0LL;
+    if (fcntl(DEV_FD(dev), F_SETLK, &flk)) {
+        err = errno;
+        ntfs_log_perror("Failed to %s lock '%s'", NDevReadOnly(dev) ? "read" : "write", dev->d_name);
+        if (close(DEV_FD(dev)))
+            ntfs_log_perror("Failed to close '%s'", dev->d_name);
+        goto err_out;
+    }
+
+    NDevSetOpen(dev);
+    return 0;
 err_out:
-	free(dev->d_private);
-	dev->d_private = NULL;
-	errno = err;
-	return -1;
+    free(dev->d_private);
+    dev->d_private = NULL;
+    errno = err;
+    return -1;
 }
 
 /**
@@ -202,33 +201,34 @@ err_out:
  */
 static int ntfs_device_unix_io_close(struct ntfs_device *dev)
 {
-	struct flock flk;
+    struct flock flk;
 
-	if (!NDevOpen(dev)) {
-		errno = EBADF;
-		ntfs_log_perror("Device %s is not open", dev->d_name);
-		return -1;
-	}
-	if (NDevDirty(dev))
-		if (ntfs_fsync(DEV_FD(dev))) {
-			ntfs_log_perror("Failed to fsync device %s", dev->d_name);
-			return -1;
-		}
+    if (!NDevOpen(dev)) {
+        errno = EBADF;
+        ntfs_log_perror("Device %s is not open", dev->d_name);
+        return -1;
+    }
 
-	memset(&flk, 0, sizeof(flk));
-	flk.l_type = F_UNLCK;
-	flk.l_whence = SEEK_SET;
-	flk.l_start = flk.l_len = 0LL;
-	if (fcntl(DEV_FD(dev), F_SETLK, &flk))
-		ntfs_log_perror("Could not unlock %s", dev->d_name);
-	if (close(DEV_FD(dev))) {
-		ntfs_log_perror("Failed to close device %s", dev->d_name);
-		return -1;
-	}
-	NDevClearOpen(dev);
-	free(dev->d_private);
-	dev->d_private = NULL;
-	return 0;
+    if (NDevDirty(dev))
+        if (ntfs_fsync(DEV_FD(dev))) {
+            ntfs_log_perror("Failed to fsync device %s", dev->d_name);
+            return -1;
+        }
+
+    memset(&flk, 0, sizeof(flk));
+    flk.l_type = F_UNLCK;
+    flk.l_whence = SEEK_SET;
+    flk.l_start = flk.l_len = 0LL;
+    if (fcntl(DEV_FD(dev), F_SETLK, &flk))
+        ntfs_log_perror("Could not unlock %s", dev->d_name);
+    if (close(DEV_FD(dev))) {
+        ntfs_log_perror("Failed to close device %s", dev->d_name);
+        return -1;
+    }
+    NDevClearOpen(dev);
+    free(dev->d_private);
+    dev->d_private = NULL;
+    return 0;
 }
 
 /**
@@ -241,10 +241,9 @@ static int ntfs_device_unix_io_close(struct ntfs_device *dev)
  *
  * Returns:
  */
-static s64 ntfs_device_unix_io_seek(struct ntfs_device *dev, s64 offset,
-		int whence)
+static s64 ntfs_device_unix_io_seek(struct ntfs_device *dev, s64 offset, int whence)
 {
-	return lseek(DEV_FD(dev), offset, whence);
+    return lseek(DEV_FD(dev), offset, whence);
 }
 
 /**
@@ -257,10 +256,9 @@ static s64 ntfs_device_unix_io_seek(struct ntfs_device *dev, s64 offset,
  *
  * Returns:
  */
-static s64 ntfs_device_unix_io_read(struct ntfs_device *dev, void *buf,
-		s64 count)
+static s64 ntfs_device_unix_io_read(struct ntfs_device *dev, void *buf, s64 count)
 {
-	return read(DEV_FD(dev), buf, count);
+    return read(DEV_FD(dev), buf, count);
 }
 
 /**
@@ -273,15 +271,15 @@ static s64 ntfs_device_unix_io_read(struct ntfs_device *dev, void *buf,
  *
  * Returns:
  */
-static s64 ntfs_device_unix_io_write(struct ntfs_device *dev, const void *buf,
-		s64 count)
+static s64 ntfs_device_unix_io_write(struct ntfs_device *dev, const void *buf, s64 count)
 {
-	if (NDevReadOnly(dev)) {
-		errno = EROFS;
-		return -1;
-	}
-	NDevSetDirty(dev);
-	return write(DEV_FD(dev), buf, count);
+    if (NDevReadOnly(dev)) {
+        errno = EROFS;
+        return -1;
+    }
+    NDevSetDirty(dev);
+
+    return write(DEV_FD(dev), buf, count);
 }
 
 /**
@@ -296,9 +294,9 @@ static s64 ntfs_device_unix_io_write(struct ntfs_device *dev, const void *buf,
  * Returns:
  */
 static s64 ntfs_device_unix_io_pread(struct ntfs_device *dev, void *buf,
-		s64 count, s64 offset)
+        s64 count, s64 offset)
 {
-	return pread(DEV_FD(dev), buf, count, offset);
+    return pread(DEV_FD(dev), buf, count, offset);
 }
 
 /**
@@ -313,14 +311,14 @@ static s64 ntfs_device_unix_io_pread(struct ntfs_device *dev, void *buf,
  * Returns:
  */
 static s64 ntfs_device_unix_io_pwrite(struct ntfs_device *dev, const void *buf,
-		s64 count, s64 offset)
+        s64 count, s64 offset)
 {
-	if (NDevReadOnly(dev)) {
-		errno = EROFS;
-		return -1;
-	}
-	NDevSetDirty(dev);
-	return pwrite(DEV_FD(dev), buf, count, offset);
+    if (NDevReadOnly(dev)) {
+        errno = EROFS;
+        return -1;
+    }
+    NDevSetDirty(dev);
+    return pwrite(DEV_FD(dev), buf, count, offset);
 }
 
 /**
@@ -333,16 +331,16 @@ static s64 ntfs_device_unix_io_pwrite(struct ntfs_device *dev, const void *buf,
  */
 static int ntfs_device_unix_io_sync(struct ntfs_device *dev)
 {
-	int res = 0;
-	
-	if (!NDevReadOnly(dev)) {
-		res = ntfs_fsync(DEV_FD(dev));
-		if (res)
-			ntfs_log_perror("Failed to sync device %s", dev->d_name);
-		else
-			NDevClearDirty(dev);
-	}
-	return res;
+    int res = 0;
+
+    if (!NDevReadOnly(dev)) {
+        res = ntfs_fsync(DEV_FD(dev));
+        if (res)
+            ntfs_log_perror("Failed to sync device %s", dev->d_name);
+        else
+            NDevClearDirty(dev);
+    }
+    return res;
 }
 
 /**
@@ -356,7 +354,7 @@ static int ntfs_device_unix_io_sync(struct ntfs_device *dev)
  */
 static int ntfs_device_unix_io_stat(struct ntfs_device *dev, struct stat *buf)
 {
-	return fstat(DEV_FD(dev), buf);
+    return fstat(DEV_FD(dev), buf);
 }
 
 /**
@@ -369,24 +367,23 @@ static int ntfs_device_unix_io_stat(struct ntfs_device *dev, struct stat *buf)
  *
  * Returns:
  */
-static int ntfs_device_unix_io_ioctl(struct ntfs_device *dev,
-		unsigned long request, void *argp)
+static int ntfs_device_unix_io_ioctl(struct ntfs_device *dev, unsigned long request, void *argp)
 {
-	return ioctl(DEV_FD(dev), request, argp);
+    return ioctl(DEV_FD(dev), request, argp);
 }
 
 /**
  * Device operations for working with unix style devices and files.
  */
 struct ntfs_device_operations ntfs_device_unix_io_ops = {
-	.open		= ntfs_device_unix_io_open,
-	.close		= ntfs_device_unix_io_close,
-	.seek		= ntfs_device_unix_io_seek,
-	.read		= ntfs_device_unix_io_read,
-	.write		= ntfs_device_unix_io_write,
-	.pread		= ntfs_device_unix_io_pread,
-	.pwrite		= ntfs_device_unix_io_pwrite,
-	.sync		= ntfs_device_unix_io_sync,
-	.stat		= ntfs_device_unix_io_stat,
-	.ioctl		= ntfs_device_unix_io_ioctl,
+    .open        = ntfs_device_unix_io_open,
+    .close        = ntfs_device_unix_io_close,
+    .seek        = ntfs_device_unix_io_seek,
+    .read        = ntfs_device_unix_io_read,
+    .write        = ntfs_device_unix_io_write,
+    .pread        = ntfs_device_unix_io_pread,
+    .pwrite        = ntfs_device_unix_io_pwrite,
+    .sync        = ntfs_device_unix_io_sync,
+    .stat        = ntfs_device_unix_io_stat,
+    .ioctl        = ntfs_device_unix_io_ioctl,
 };

@@ -1,37 +1,4 @@
-file(GLOB LIB_NTFS_3G
-        acls.c
-        attrib.c
-        attrlist.c
-        bitmap.c
-        bootsect.c
-        cache.c
-        collate.c
-        compat.c
-        compress.c
-        debug.c
-        device.c
-        dir.c
-        ea.c
-        efs.c
-        index.c
-        inode.c
-        ioctl.c
-        lcnalloc.c
-        logfile.c
-        logging.c
-        mft.c
-        misc.c
-        mst.c
-        object_id.c
-        realpath.c
-        reparse.c
-        runlist.c
-        security.c
-        unistr.c
-        unix_io.c
-        volume.c
-        xattrs.c
-)
+include(libntfs-3g.cmake)
 
 add_library(libntfs-3g STATIC ${LIB_NTFS_3G})
 target_include_directories(libntfs-3g PUBLIC

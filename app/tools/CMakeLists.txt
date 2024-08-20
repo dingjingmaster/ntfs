@@ -1,3 +1,7 @@
+include(../libntfs-3g/libntfs-3g.cmake)
+include(../libfuse-lite/libfuse-lite.cmake)
+
+
 add_executable(ntfs-fix ntfsfix.c utils.h utils.c)
 target_include_directories(ntfs-fix
         PUBLIC ${CMAKE_SOURCE_DIR}/app/
@@ -220,7 +224,7 @@ target_link_libraries(ntfsck PUBLIC
         -L${CMAKE_BINARY_DIR}/app/libfuse-lite
         libntfs-3g libfuse-lite)
 
-add_executable(mkntfs attrdef.c attrdef.h boot.c boot.h sd.c sd.h mkntfs.c utils.c utils.h)
+add_executable(mkntfs attrdef.c attrdef.h boot.c boot.h sd.c sd.h mkntfs.c utils.c utils.h ${LIB_NTFS_3G} ${FUSE_LITE_SRC})
 target_include_directories(mkntfs
         PUBLIC ${CMAKE_SOURCE_DIR}/app/
         PUBLIC ${CMAKE_SOURCE_DIR}/app/include/ntfs-3g

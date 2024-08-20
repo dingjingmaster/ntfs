@@ -37,6 +37,7 @@
 #ifndef HAVE_WINDOWS_H
 
 /* Not for Windows use standard Unix style low level device operations. */
+// unix_io.c
 #define ntfs_device_default_io_ops ntfs_device_unix_io_ops
 
 #else /* HAVE_WINDOWS_H */
