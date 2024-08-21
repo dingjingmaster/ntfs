@@ -1441,10 +1441,7 @@ static int mkntfs_attr_find(const ATTR_TYPES type, const ntfschar *name,
  *    EIO    I/O error or corrupt data structures found.
  *    ENOMEM    Not enough memory to allocate necessary buffers.
  */
-static int mkntfs_attr_lookup(const ATTR_TYPES type, const ntfschar *name,
-        const u32 name_len, const IGNORE_CASE_BOOL ic,
-        const VCN lowest_vcn __attribute__((unused)), const u8 *val,
-        const u32 val_len, ntfs_attr_search_ctx *ctx)
+static int mkntfs_attr_lookup(const ATTR_TYPES type, const ntfschar *name, const u32 name_len, const IGNORE_CASE_BOOL ic, const VCN lowest_vcn __attribute__((unused)), const u8 *val, const u32 val_len, ntfs_attr_search_ctx *ctx)
 {
     ntfs_inode *base_ni;
 
@@ -1452,14 +1449,20 @@ static int mkntfs_attr_lookup(const ATTR_TYPES type, const ntfschar *name,
         errno = EINVAL;
         return -1;
     }
-    if (ctx->base_ntfs_ino)
+
+    if (ctx->base_ntfs_ino) {
         base_ni = ctx->base_ntfs_ino;
-    else
+    }
+    else {
         base_ni = ctx->ntfs_ino;
-    if (!base_ni || !NInoAttrList(base_ni) || type == AT_ATTRIBUTE_LIST)
-        return mkntfs_attr_find(type, name, name_len, ic, val, val_len,
-                ctx);
+    }
+
+    if (!base_ni || !NInoAttrList(base_ni) || type == AT_ATTRIBUTE_LIST) {
+        return mkntfs_attr_find(type, name, name_len, ic, val, val_len, ctx);
+    }
+
     errno = EOPNOTSUPP;
+
     return -1;
 }
 
@@ -1533,29 +1536,35 @@ static int insert_positioned_attr_in_mft_record(MFT_RECORD *m,
         hdr_size = 72;
         /* FIXME: This compression stuff is all wrong. Never mind for */
         /* now. (AIA) */
-        if (val_len)
+        if (val_len) {
             mpa_size = 0; /* get_size_for_compressed_mapping_pairs(rl); */
-        else
+        }
+        else {
             mpa_size = 0;
-    } else {
+        }
+    }
+    else {
         hdr_size = 64;
         if (val_len) {
             mpa_size = ntfs_get_size_for_mapping_pairs(g_vol, rl, 0, INT_MAX);
             if (mpa_size < 0) {
                 err = -errno;
-                ntfs_log_error("Failed to get size for mapping "
-                        "pairs.\n");
+                ntfs_log_error("Failed to get size for mapping pairs.\n");
                 goto err_out;
             }
-        } else {
+        }
+        else {
             mpa_size = 0;
         }
     }
     /* Mapping pairs array and next attribute must be 8-byte aligned. */
     asize = (((int)hdr_size + ((name_len + 7) & ~7) + mpa_size) + 7) & ~7;
+
     /* Get the highest vcn. */
-    for (i = 0, highest_vcn = 0LL; rl[i].length; i++)
+    for (i = 0, highest_vcn = 0LL; rl[i].length; i++) {
         highest_vcn += rl[i].length;
+    }
+
     /* Does the value fit inside the allocated size? */
     if (highest_vcn * g_vol->cluster_size < val_len) {
         ntfs_log_error("BUG: Allocated size is smaller than data size!\n");
@@ -1597,8 +1606,7 @@ static int insert_positioned_attr_in_mft_record(MFT_RECORD *m,
     a->name_offset = cpu_to_le16(hdr_size);
     a->flags = flags;
     a->instance = m->next_attr_instance;
-    m->next_attr_instance = cpu_to_le16((le16_to_cpu(m->next_attr_instance)
-            + 1) & 0xffff);
+    m->next_attr_instance = cpu_to_le16((le16_to_cpu(m->next_attr_instance) + 1) & 0xffff);
     a->lowest_vcn = const_cpu_to_sle64(0);
     a->highest_vcn = cpu_to_sle64(highest_vcn - 1LL);
     a->mapping_pairs_offset = cpu_to_le16(hdr_size + ((name_len + 7) & ~7));
@@ -1606,12 +1614,12 @@ static int insert_positioned_attr_in_mft_record(MFT_RECORD *m,
     /* FIXME: Allocated size depends on compression. */
     a->allocated_size = cpu_to_sle64(highest_vcn * g_vol->cluster_size);
     a->data_size = cpu_to_sle64(val_len);
-    if (name_len)
+    if (name_len) {
         memcpy((char*)a + hdr_size, uname, name_len << 1);
+    }
     if (flags & ATTR_COMPRESSION_MASK) {
         if (flags & ATTR_COMPRESSION_MASK & ~ATTR_IS_COMPRESSED) {
-            ntfs_log_error("Unknown compression format. Reverting "
-                    "to standard compression.\n");
+            ntfs_log_error("Unknown compression format. Reverting to standard compression.\n");
             a->flags &= ~ATTR_COMPRESSION_MASK;
             a->flags |= ATTR_IS_COMPRESSED;
         }
@@ -1622,38 +1630,37 @@ static int insert_positioned_attr_in_mft_record(MFT_RECORD *m,
         /* FIXME: Write out the compressed data. */
         /* FIXME: err = build_mapping_pairs_compressed(); */
         err = -EOPNOTSUPP;
-    } else {
+    }
+    else {
         a->compression_unit = 0;
-        if ((type == AT_DATA)
-            && (m->mft_record_number
-                 == const_cpu_to_le32(FILE_LogFile)))
-            bw = ntfs_rlwrite(g_vol->dev, rl, val, val_len,
-                    &inited_size, WRITE_LOGFILE);
-        else
-            bw = ntfs_rlwrite(g_vol->dev, rl, val, val_len,
-                    &inited_size, WRITE_STANDARD);
+        if ((type == AT_DATA) && (m->mft_record_number == const_cpu_to_le32(FILE_LogFile))) {
+            bw = ntfs_rlwrite(g_vol->dev, rl, val, val_len, &inited_size, WRITE_LOGFILE);
+        }
+        else {
+            bw = ntfs_rlwrite(g_vol->dev, rl, val, val_len, &inited_size, WRITE_STANDARD);
+        }
         if (bw != val_len) {
-            ntfs_log_error("Error writing non-resident attribute "
-                    "value.\n");
+            ntfs_log_error("Error writing non-resident attribute value.\n");
             return -errno;
         }
-        err = ntfs_mapping_pairs_build(g_vol, (u8*)a + hdr_size +
-                ((name_len + 7) & ~7), mpa_size, rl, 0, NULL);
+        err = ntfs_mapping_pairs_build(g_vol, (u8*)a + hdr_size + ((name_len + 7) & ~7), mpa_size, rl, 0, NULL);
     }
     a->initialized_size = cpu_to_sle64(inited_size);
     if (err < 0 || bw != val_len) {
         /* FIXME: Handle error. */
         /* deallocate clusters */
         /* remove attribute */
-        if (err >= 0)
+        if (err >= 0) {
             err = -EIO;
-        ntfs_log_error("insert_positioned_attr_in_mft_record failed "
-                "with error %i.\n", err < 0 ? err : (int)bw);
+        }
+        ntfs_log_error("insert_positioned_attr_in_mft_record failed with error %i.\n", err < 0 ? err : (int)bw);
     }
 err_out:
-    if (ctx)
+    if (ctx) {
         ntfs_attr_put_search_ctx(ctx);
+    }
     ntfs_ucsfree(uname);
+
     return err;
 }
 
@@ -4291,7 +4298,7 @@ static BOOL mkntfs_sync_index_record(INDEX_ALLOCATION* idx, MFT_RECORD* m, ntfsc
     ntfs_attr_search_ctx *ctx;
     ATTR_RECORD *a;
     long long lw;
-    runlist    *rl_index = NULL;
+    runlist* rl_index = NULL;
 
     i = 5 * sizeof(ntfschar);
     ctx = ntfs_attr_get_search_ctx(NULL, m);
@@ -4300,8 +4307,7 @@ static BOOL mkntfs_sync_index_record(INDEX_ALLOCATION* idx, MFT_RECORD* m, ntfsc
         return FALSE;
     }
     /* FIXME: This should be IGNORE_CASE! */
-    if (mkntfs_attr_lookup(AT_INDEX_ALLOCATION, name, name_len,
-            CASE_SENSITIVE, 0, NULL, 0, ctx)) {
+    if (mkntfs_attr_lookup(AT_INDEX_ALLOCATION, name, name_len, CASE_SENSITIVE, 0, NULL, 0, ctx)) {
         ntfs_attr_put_search_ctx(ctx);
         ntfs_log_error("BUG: $INDEX_ALLOCATION attribute not found.\n");
         return FALSE;
@@ -5165,7 +5171,7 @@ static int mkntfs_redirect(struct mkntfs_options *opts2)
         goto done;
     }
 
-    /*
+    /**
      * - Do not step onto bad blocks!!!
      * - If any bad blocks were specified or found, modify $BadClus,
      *   allocating the bad clusters in $Bitmap.
@@ -5179,8 +5185,9 @@ static int mkntfs_redirect(struct mkntfs_options *opts2)
      *   possible and update during each subsequent c&w of each system file.
      */
     ntfs_log_verbose("Syncing root directory index record.\n");
-    if (!mkntfs_sync_index_record(g_index_block, (MFT_RECORD*)(g_buf + 5 * g_vol->mft_record_size), NTFS_INDEX_I30, 4))
+    if (!mkntfs_sync_index_record(g_index_block, (MFT_RECORD*) (g_buf + 5 * g_vol->mft_record_size), NTFS_INDEX_I30, 4)) {
         goto done;
+    }
 
     ntfs_log_verbose("Syncing $Bitmap.\n");
     m = (MFT_RECORD*)(g_buf + 6 * g_vol->mft_record_size);

@@ -3743,12 +3743,14 @@ int ntfs_attr_position(const ATTR_TYPES type, ntfs_attr_search_ctx *ctx)
  *
  * Initialize the attribute search context @ctx with @ni and @mrec.
  */
-static void ntfs_attr_init_search_ctx(ntfs_attr_search_ctx *ctx,
-		ntfs_inode *ni, MFT_RECORD *mrec)
+static void ntfs_attr_init_search_ctx(ntfs_attr_search_ctx *ctx, ntfs_inode *ni, MFT_RECORD *mrec)
 {
-	if (!mrec)
-		mrec = ni->mrec;
+	if (!mrec) {
+        mrec = ni->mrec;
+    }
+
 	ctx->mrec = mrec;
+
 	/* Sanity checks are performed elsewhere. */
 	ctx->attr = (ATTR_RECORD*)((u8*)mrec + le16_to_cpu(mrec->attrs_offset));
 	ctx->is_first = TRUE;
@@ -3811,8 +3813,10 @@ ntfs_attr_search_ctx *ntfs_attr_get_search_ctx(ntfs_inode *ni, MFT_RECORD *mrec)
 		return NULL;
 	}
 	ctx = ntfs_malloc(sizeof(ntfs_attr_search_ctx));
-	if (ctx)
-		ntfs_attr_init_search_ctx(ctx, ni, mrec);
+	if (ctx) {
+        ntfs_attr_init_search_ctx(ctx, ni, mrec);
+    }
+
 	return ctx;
 }
 
