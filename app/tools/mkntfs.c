@@ -159,14 +159,16 @@ switch if you want to be able to build the NTFS utilities."
 
 static char EXEC_NAME[] = "mkntfs";
 
-struct BITMAP_ALLOCATION {
+struct BITMAP_ALLOCATION
+{
     struct BITMAP_ALLOCATION *next;
-    LCN    lcn;        /* first allocated cluster */
-    s64    length;        /* count of consecutive clusters */
+    LCN    lcn;                 /* first allocated cluster */
+    s64    length;              /* count of consecutive clusters */
 } ;
 
-        /* Upcase $Info, used since Windows 8 */
-struct UPCASEINFO {
+/* Upcase $Info, used since Windows 8 */
+struct UPCASEINFO
+{
     le32    len;
     le32    filler;
     le64    crc;
@@ -178,33 +180,38 @@ struct UPCASEINFO {
 } ;
 
 /**
- * global variables
+ * @brief global variables
+ *
+ * MFT 是NTFS文件系统中最重要的元数据结构之一，它存储了所有文件和目录的元数据信息，包括：文件名、属性、位置
+ * LCN 逻辑簇号，在NTFS文件系统中，磁盘空间以簇为单位进行管理的。逻辑簇号就是用来标识磁盘上的簇的编号
+ *
+ * g_mft_lcn 是一个全局变量，用于记录MFT的起始逻辑簇号。它告诉文件系统MFT从磁盘哪个位置开始存储。这个信息在文件系统初始化和文件访问时候非常重要。
+ *
  */
-static u8          *g_buf          = NULL;
-static int           g_mft_bitmap_byte_size = 0;
-static u8          *g_mft_bitmap          = NULL;
-static int           g_lcn_bitmap_byte_size = 0;
-static int           g_dynamic_buf_size      = 0;
-static u8          *g_dynamic_buf      = NULL;
-static struct UPCASEINFO  *g_upcaseinfo          = NULL;
-static runlist          *g_rl_mft          = NULL;
-static runlist          *g_rl_mft_bmp          = NULL;
-static runlist          *g_rl_mftmirr          = NULL;
-static runlist          *g_rl_logfile          = NULL;
-static runlist          *g_rl_boot          = NULL;
-static runlist          *g_rl_bad          = NULL;
-static INDEX_ALLOCATION  *g_index_block      = NULL;
-static ntfs_volume      *g_vol          = NULL;
-static int           g_mft_size          = 0;
-static long long       g_mft_lcn          = 0;        /* lcn of $MFT, $DATA attribute */
-static long long       g_mftmirr_lcn      = 0;        /* lcn of $MFTMirr, $DATA */
-static long long       g_logfile_lcn      = 0;        /* lcn of $LogFile, $DATA */
-static int           g_logfile_size      = 0;        /* in bytes, determined from volume_size */
-static long long       g_mft_zone_end      = 0;        /* Determined from volume_size and mft_zone_multiplier, in clusters */
-static long long       g_num_bad_blocks      = 0;        /* Number of bad clusters */
-static long long      *g_bad_blocks          = NULL;    /* Array of bad clusters */
-
-static struct BITMAP_ALLOCATION *g_allocation      = NULL;    /* Head of cluster allocations */
+static u8*                      g_buf                   = NULL;
+static int                      g_mft_bitmap_byte_size  = 0;
+static u8*                      g_mft_bitmap            = NULL;
+static int                      g_lcn_bitmap_byte_size  = 0;
+static int                      g_dynamic_buf_size      = 0;
+static u8*                      g_dynamic_buf           = NULL;
+static struct UPCASEINFO*       g_upcaseinfo            = NULL;
+static runlist*                 g_rl_mft                = NULL;
+static runlist*                 g_rl_mft_bmp            = NULL;
+static runlist*                 g_rl_mftmirr            = NULL;
+static runlist*                 g_rl_logfile            = NULL;
+static runlist*                 g_rl_boot               = NULL;
+static runlist*                 g_rl_bad                = NULL;
+static INDEX_ALLOCATION*        g_index_block           = NULL;
+static ntfs_volume*             g_vol                   = NULL;
+static int                      g_mft_size              = 0;
+static long long                g_mft_lcn               = 0;        /* lcn(Logical Cluster Number) of $MFT, $DATA attribute */
+static long long                g_mftmirr_lcn           = 0;        /* lcn of $MFTMirr, $DATA */
+static long long                g_logfile_lcn           = 0;        /* lcn of $LogFile, $DATA */
+static int                      g_logfile_size          = 0;        /* in bytes, determined from volume_size */
+static long long                g_mft_zone_end          = 0;        /* Determined from volume_size and mft_zone_multiplier, in clusters */
+static long long                g_num_bad_blocks        = 0;        /* Number of bad clusters */
+static long long*               g_bad_blocks            = NULL;     /* Array of bad clusters */
+static struct BITMAP_ALLOCATION*g_allocation            = NULL;     /* Head of cluster allocations */
 
 /**
  * struct mkntfs_options
@@ -366,9 +373,9 @@ static uint64_t crc64(uint64_t crc, const byte * data, size_t size)
 }
 
 /*
- *        Mark a run of clusters as allocated
+ * Mark a run of clusters as allocated
  *
- *    Returns FALSE if unsuccessful
+ * Returns FALSE if unsuccessful
  */
 
 static BOOL bitmap_allocate(LCN lcn, s64 length)
@@ -383,29 +390,37 @@ static BOOL bitmap_allocate(LCN lcn, s64 length)
         p = g_allocation;
         q = (struct BITMAP_ALLOCATION*)NULL;
         /* locate the first run which starts beyond the requested lcn */
+        // 找到请求的lcn之后的第一个 run
         while (p && (p->lcn <= lcn)) {
             q = p;
             p = p->next;
         }
+
+        // q 前一个
+        // p 当前
         /* make sure the requested lcns were not allocated */
-        if ((q && ((q->lcn + q->length) > lcn))
-           || (p && ((lcn + length) > p->lcn))) {
+        if ((q && ((q->lcn + q->length) > lcn)) || (p && ((lcn + length) > p->lcn))) {
             ntfs_log_error("Bitmap allocation error\n");
             done = FALSE;
         }
         if (q && ((q->lcn + q->length) == lcn)) {
             /* extend current run, no overlapping possible */
             q->length += length;
-        } else {
-            newall = (struct BITMAP_ALLOCATION*)
-                    ntfs_malloc(sizeof(struct BITMAP_ALLOCATION));
+        }
+        else {
+            newall = (struct BITMAP_ALLOCATION*) ntfs_malloc(sizeof(struct BITMAP_ALLOCATION));
             if (newall) {
                 newall->lcn = lcn;
                 newall->length = length;
                 newall->next = p;
-                if (q) q->next = newall;
-                else g_allocation = newall;
-            } else {
+                if (q) {
+                    q->next = newall;
+                }
+                else {
+                    g_allocation = newall;
+                }
+            }
+            else {
                 done = FALSE;
                 ntfs_log_perror("Not enough memory");
             }
@@ -3882,30 +3897,43 @@ static BOOL mkntfs_initialize_bitmaps(void)
     int mft_bitmap_size;
 
     /* Determine lcn bitmap byte size and allocate it. */
+    /**
+     * (扇区数量 + 7) / 8
+     */
     g_lcn_bitmap_byte_size = (g_vol->nr_clusters + 7) >> 3;
+    printf("g_lcn_bitmap_byte_size: %d\n", g_lcn_bitmap_byte_size);
 
     /* Needs to be multiple of 8 bytes. */
+    // 将 (g_lcn_bitmap_byte_size + 7) 结果限定在 (0 - 255) 之间，也就是 8 bit
     g_lcn_bitmap_byte_size = (g_lcn_bitmap_byte_size + 7) & ~7;
     i = (g_lcn_bitmap_byte_size + g_vol->cluster_size - 1) & ~(g_vol->cluster_size - 1);
     ntfs_log_debug("g_lcn_bitmap_byte_size = %i, allocated = %llu\n", g_lcn_bitmap_byte_size, (unsigned long long)i);
-    g_dynamic_buf_size = mkntfs_get_page_size();
+    g_dynamic_buf_size = mkntfs_get_page_size(); // 4096
     g_dynamic_buf = (u8*)ntfs_calloc(g_dynamic_buf_size);
-    if (!g_dynamic_buf)
+    if (!g_dynamic_buf) {
         return FALSE;
-    /*
+    }
+
+    /**
      * $Bitmap can overlap the end of the volume. Any bits in this region
      * must be set. This region also encompasses the backup boot sector.
+     *
+     * $Bitmap可以重叠卷的末尾。该区域内的所有位都必须设置。
+     * 该区域还包括引导扇区的备份。
      */
-    if (!bitmap_allocate(g_vol->nr_clusters, ((s64)g_lcn_bitmap_byte_size << 3) - g_vol->nr_clusters))
+    if (!bitmap_allocate(g_vol->nr_clusters, ((s64)g_lcn_bitmap_byte_size << 3) - g_vol->nr_clusters)) {
         return (FALSE);
-    /*
+    }
+
+    /**
      * Mft size is 27 (NTFS 3.0+) mft records or one cluster, whichever is
      * bigger.
      */
     g_mft_size = 27;
     g_mft_size *= g_vol->mft_record_size;
-    if (g_mft_size < (s32)g_vol->cluster_size)
+    if (g_mft_size < (s32)g_vol->cluster_size) {
         g_mft_size = g_vol->cluster_size;
+    }
     ntfs_log_debug("MFT size = %i (0x%x) bytes\n", g_mft_size, g_mft_size);
 
     /* Determine mft bitmap size and allocate it. */
@@ -3918,19 +3946,22 @@ static BOOL mkntfs_initialize_bitmaps(void)
     g_mft_bitmap_byte_size = (g_mft_bitmap_byte_size + 7) & ~7;
     ntfs_log_debug("mft_bitmap_size = %i, g_mft_bitmap_byte_size = %i\n", mft_bitmap_size, g_mft_bitmap_byte_size);
     g_mft_bitmap = ntfs_calloc(g_mft_bitmap_byte_size);
-    if (!g_mft_bitmap)
+    if (!g_mft_bitmap) {
         return FALSE;
+    }
 
     /* Create runlist for mft bitmap. */
     g_rl_mft_bmp = ntfs_malloc(2 * sizeof(runlist));
-    if (!g_rl_mft_bmp)
+    if (!g_rl_mft_bmp) {
         return FALSE;
-
+    }
     g_rl_mft_bmp[0].vcn = 0LL;
 
     /* Mft bitmap is right after $Boot's data. */
+    // Mft bitmap 位于$Boot的数据之后。
     i = (8192 + g_vol->cluster_size - 1) / g_vol->cluster_size;
     g_rl_mft_bmp[0].lcn = i;
+
     /*
      * Size is always one cluster, even though valid data size and
      * initialized data size are only 8 bytes.
@@ -3941,7 +3972,7 @@ static BOOL mkntfs_initialize_bitmaps(void)
     g_rl_mft_bmp[1].length = 0LL;
 
     /* Allocate cluster for mft bitmap. */
-    return (bitmap_allocate(i,1));
+    return (bitmap_allocate(i, 1));
 }
 
 /**
@@ -3959,30 +3990,34 @@ static BOOL mkntfs_initialize_rl_mft(void)
          * mft bitmap.
          */
         g_mft_lcn = g_rl_mft_bmp[0].lcn + g_rl_mft_bmp[0].length;
-        if (g_mft_lcn * g_vol->cluster_size < 16 * 1024)
-            g_mft_lcn = (16 * 1024 + g_vol->cluster_size - 1) /
-                    g_vol->cluster_size;
+        if (g_mft_lcn * g_vol->cluster_size < 16 * 1024) {
+            g_mft_lcn = (16 * 1024 + g_vol->cluster_size - 1) / g_vol->cluster_size;
+        }
     }
     ntfs_log_debug("$MFT logical cluster number = 0x%llx\n", g_mft_lcn);
     /* Determine MFT zone size. */
     g_mft_zone_end = g_vol->nr_clusters;
     switch (opts.mft_zone_multiplier) {  /* % of volume size in clusters */
-    case 4:
-        g_mft_zone_end = g_mft_zone_end >> 1;    /* 50%   */
-        break;
-    case 3:
-        g_mft_zone_end = g_mft_zone_end * 3 >> 3;/* 37.5% */
-        break;
-    case 2:
-        g_mft_zone_end = g_mft_zone_end >> 2;    /* 25%   */
-        break;
-    case 1:
-    default:
-        g_mft_zone_end = g_mft_zone_end >> 3;    /* 12.5% */
-        break;
+        case 4: {
+            g_mft_zone_end = g_mft_zone_end >> 1;    /* 50%   */
+            break;
+        }
+        case 3: {
+            g_mft_zone_end = g_mft_zone_end * 3 >> 3;/* 37.5% */
+            break;
+        }
+        case 2: {
+            g_mft_zone_end = g_mft_zone_end >> 2;    /* 25%   */
+            break;
+        }
+        case 1:
+        default: {
+            g_mft_zone_end = g_mft_zone_end >> 3;    /* 12.5% */
+            break;
+        }
     }
-    ntfs_log_debug("MFT zone size = %lldkiB\n", g_mft_zone_end <<
-            g_vol->cluster_size_bits >> 10 /* >> 10 == / 1024 */);
+    ntfs_log_debug("MFT zone size = %lldkiB\n", g_mft_zone_end << g_vol->cluster_size_bits >> 10 /* >> 10 == / 1024 */);
+
     /*
      * The mft zone begins with the mft data attribute, not at the beginning
      * of the device.
@@ -3990,8 +4025,9 @@ static BOOL mkntfs_initialize_rl_mft(void)
     g_mft_zone_end += g_mft_lcn;
     /* Create runlist for mft. */
     g_rl_mft = ntfs_malloc(2 * sizeof(runlist));
-    if (!g_rl_mft)
+    if (!g_rl_mft) {
         return FALSE;
+    }
 
     g_rl_mft[0].vcn = 0LL;
     g_rl_mft[0].lcn = g_mft_lcn;
@@ -4001,17 +4037,19 @@ static BOOL mkntfs_initialize_rl_mft(void)
     g_rl_mft[0].length = j;
     g_rl_mft[1].lcn = -1LL;
     g_rl_mft[1].length = 0LL;
+
     /* Allocate clusters for mft. */
     bitmap_allocate(g_mft_lcn,j);
+
     /* Determine mftmirr_lcn (middle of volume). */
-    g_mftmirr_lcn = (opts.num_sectors * opts.sector_size >> 1)
-            / g_vol->cluster_size;
-    ntfs_log_debug("$MFTMirr logical cluster number = 0x%llx\n",
-            g_mftmirr_lcn);
+    g_mftmirr_lcn = (opts.num_sectors * opts.sector_size >> 1) / g_vol->cluster_size;
+    ntfs_log_debug("$MFTMirr logical cluster number = 0x%llx\n", g_mftmirr_lcn);
+
     /* Create runlist for mft mirror. */
     g_rl_mftmirr = ntfs_malloc(2 * sizeof(runlist));
-    if (!g_rl_mftmirr)
+    if (!g_rl_mftmirr) {
         return FALSE;
+    }
 
     g_rl_mftmirr[0].vcn = 0LL;
     g_rl_mftmirr[0].lcn = g_mftmirr_lcn;
@@ -4027,11 +4065,12 @@ static BOOL mkntfs_initialize_rl_mft(void)
     g_rl_mftmirr[0].length = j;
     g_rl_mftmirr[1].lcn = -1LL;
     g_rl_mftmirr[1].length = 0LL;
+
     /* Allocate clusters for mft mirror. */
     done = bitmap_allocate(g_mftmirr_lcn,j);
     g_logfile_lcn = g_mftmirr_lcn + j;
-    ntfs_log_debug("$LogFile logical cluster number = 0x%llx\n",
-            g_logfile_lcn);
+    ntfs_log_debug("$LogFile logical cluster number = 0x%llx\n", g_logfile_lcn);
+
     return (done);
 }
 
@@ -4045,9 +4084,9 @@ static BOOL mkntfs_initialize_rl_logfile(void)
 
     /* Create runlist for log file. */
     g_rl_logfile = ntfs_malloc(2 * sizeof(runlist));
-    if (!g_rl_logfile)
+    if (!g_rl_logfile) {
         return FALSE;
-
+    }
 
     volume_size = g_vol->nr_clusters << g_vol->cluster_size_bits;
 
@@ -4057,13 +4096,16 @@ static BOOL mkntfs_initialize_rl_logfile(void)
      * Determine logfile_size from volume_size (rounded up to a cluster),
      * making sure it does not overflow the end of the volume.
      */
-    if (volume_size < 2048LL * 1024)        /* < 2MiB    */
+    if (volume_size < 2048LL * 1024) {       /* < 2MiB    */
         g_logfile_size = 256LL * 1024;        /*   -> 256kiB    */
-    else if (volume_size < 4000000LL)        /* < 4MB    */
+    }
+    else if (volume_size < 4000000LL) {       /* < 4MB    */
         g_logfile_size = 512LL * 1024;        /*   -> 512kiB    */
-    else if (volume_size <= 200LL * 1024 * 1024)    /* < 200MiB    */
+    }
+    else if (volume_size <= 200LL * 1024 * 1024) {   /* < 200MiB    */
         g_logfile_size = 2048LL * 1024;        /*   -> 2MiB    */
-    else    {
+    }
+    else {
         /*
          * FIXME: The $LogFile size is 64 MiB upwards from 12GiB but
          * the "200" divider below apparently approximates "100" or
@@ -4075,11 +4117,12 @@ static BOOL mkntfs_initialize_rl_logfile(void)
          *      6144828        32784       187.433
          *      4192932        23024       182.111
          */
-        if (volume_size >= 12LL << 30)        /* > 12GiB    */
+        if (volume_size >= 12LL << 30) {       /* > 12GiB    */
             g_logfile_size = 64 << 20;    /*   -> 64MiB    */
-        else
-            g_logfile_size = (volume_size / 200) &
-                    ~(g_vol->cluster_size - 1);
+        }
+        else {
+            g_logfile_size = (volume_size / 200) & ~(g_vol->cluster_size - 1);
+        }
     }
     j = g_logfile_size / g_vol->cluster_size;
     while (g_rl_logfile[0].lcn + j >= g_vol->nr_clusters) {
@@ -4091,24 +4134,21 @@ static BOOL mkntfs_initialize_rl_logfile(void)
         g_logfile_size >>= 1;
         j = g_logfile_size / g_vol->cluster_size;
     }
-    g_logfile_size = (g_logfile_size + g_vol->cluster_size - 1) &
-            ~(g_vol->cluster_size - 1);
-    ntfs_log_debug("$LogFile (journal) size = %ikiB\n",
-            g_logfile_size / 1024);
+    g_logfile_size = (g_logfile_size + g_vol->cluster_size - 1) & ~(g_vol->cluster_size - 1);
+    ntfs_log_debug("$LogFile (journal) size = %ikiB\n", g_logfile_size / 1024);
     /*
      * FIXME: The 256kiB limit is arbitrary. Should find out what the real
      * minimum requirement for Windows is so it doesn't blue screen.
      */
     if (g_logfile_size < 256 << 10) {
-        ntfs_log_error("$LogFile would be created with invalid size. "
-                "This is not allowed as it would cause Windows "
-                "to blue screen and during boot.\n");
+        ntfs_log_error("$LogFile would be created with invalid size. This is not allowed as it would cause Windows to blue screen and during boot.\n");
         return FALSE;
     }
     g_rl_logfile[1].vcn = j;
     g_rl_logfile[0].length = j;
     g_rl_logfile[1].lcn = -1LL;
     g_rl_logfile[1].length = 0LL;
+
     /* Allocate clusters for log file. */
     return (bitmap_allocate(g_logfile_lcn,j));
 }
@@ -4121,8 +4161,9 @@ static BOOL mkntfs_initialize_rl_boot(void)
     int j;
     /* Create runlist for $Boot. */
     g_rl_boot = ntfs_malloc(2 * sizeof(runlist));
-    if (!g_rl_boot)
+    if (!g_rl_boot) {
         return FALSE;
+    }
 
     g_rl_boot[0].vcn = 0LL;
     g_rl_boot[0].lcn = 0LL;
@@ -4135,6 +4176,7 @@ static BOOL mkntfs_initialize_rl_boot(void)
     g_rl_boot[0].length = j;
     g_rl_boot[1].lcn = -1LL;
     g_rl_boot[1].length = 0LL;
+
     /* Allocate clusters for $Boot. */
     return (bitmap_allocate(0,j));
 }
@@ -5063,28 +5105,43 @@ static int mkntfs_redirect(struct mkntfs_options *opts2)
         goto done;
     }
 
-    /*
+    /**
      * Decide on the sector size, cluster size, mft record and index record
      * sizes as well as the number of sectors/tracks/heads/size, etc.
+     *  - 扇区大小
+     *  - 扇区数量
+     *  - 最后一个扇区作为引导备份扇区(512 byte)
+     *  - 磁头数量
+     *  - 块大小
+     *  - 块数量
+     *  - 容量检测
+     *  - mft大小设置
+     *  - index大小设置
+     * 这个函数主要根据输入参数设置NTFS属性大小、检查属性是否处于合理范围
      */
-    if (!mkntfs_override_vol_params(g_vol))
+    if (!mkntfs_override_vol_params(g_vol)) {
         goto done;
+    }
 
     /* Initialize $Bitmap and $MFT/$BITMAP related stuff. */
-    if (!mkntfs_initialize_bitmaps())
+    if (!mkntfs_initialize_bitmaps()) {
         goto done;
+    }
 
     /* Initialize MFT & set g_logfile_lcn. */
-    if (!mkntfs_initialize_rl_mft())
+    if (!mkntfs_initialize_rl_mft()) {
         goto done;
+    }
 
     /* Initialize $LogFile. */
-    if (!mkntfs_initialize_rl_logfile())
+    if (!mkntfs_initialize_rl_logfile()) {
         goto done;
+    }
 
     /* Initialize $Boot. */
-    if (!mkntfs_initialize_rl_boot())
+    if (!mkntfs_initialize_rl_boot()) {
         goto done;
+    }
 
     /* Allocate a buffer large enough to hold the mft. */
     g_buf = ntfs_calloc(g_mft_size);
