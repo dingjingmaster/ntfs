@@ -111,8 +111,7 @@
  * On success return a pointer to the allocated ntfs device structure and on
  * error return NULL with errno set to the error code returned by ntfs_malloc().
  */
-struct ntfs_device *ntfs_device_alloc(const char *name, const long state,
-        struct ntfs_device_operations *dops, void *priv_data)
+struct ntfs_device *ntfs_device_alloc(const char *name, const long state, struct ntfs_device_operations *dops, void *priv_data)
 {
     struct ntfs_device *dev;
 
@@ -135,6 +134,7 @@ struct ntfs_device *ntfs_device_alloc(const char *name, const long state,
         dev->d_heads = -1;
         dev->d_sectors_per_track = -1;
     }
+
     return dev;
 }
 
@@ -535,12 +535,10 @@ s64 ntfs_device_size_get(struct ntfs_device *dev, int block_size)
         return -1;
     }
 #ifdef BLKGETSIZE64
-    {    u64 size;
-
+    {
+        u64 size;
         if (dev->d_ops->ioctl(dev, BLKGETSIZE64, &size) >= 0) {
-            ntfs_log_debug("BLKGETSIZE64 nr bytes = %llu (0x%llx)\n",
-                    (unsigned long long)size,
-                    (unsigned long long)size);
+            ntfs_log_debug("BLKGETSIZE64 nr bytes = %llu (0x%llx)\n", (unsigned long long)size, (unsigned long long)size);
             return (s64)size / block_size;
         }
     }
@@ -634,11 +632,11 @@ s64 ntfs_device_partition_start_sector_get(struct ntfs_device *dev)
         return -1;
     }
 #ifdef HDIO_GETGEO
-    {    struct hd_geometry geo;
+    {
+        struct hd_geometry geo;
 
         if (!dev->d_ops->ioctl(dev, HDIO_GETGEO, &geo)) {
-            ntfs_log_debug("HDIO_GETGEO start_sect = %lu (0x%lx)\n",
-                    geo.start, geo.start);
+            ntfs_log_debug("HDIO_GETGEO start_sect = %lu (0x%lx)\n", geo.start, geo.start);
             return geo.start;
         }
     }
@@ -757,14 +755,25 @@ end_hd:
 skip_hd:
 #endif
 #ifdef HDIO_GETGEO
-    {    struct hd_geometry geo;
+    {
+        /**
+         * 用于描述硬盘几何结构的数据结构
+         * 成员包括：
+         *  - unsigned char heads：磁盘磁头数量
+         *  - unsigned char sectors：每个磁道包含的扇区数
+         *  - unsigned short cylinders：磁盘的柱面数
+         *  - unsigned long start：分区在磁盘上的起始扇区号
+         *      磁盘可以被划分为多个逻辑分区，每个分区都有自己独立的文件系统。
+         *      分区的起始扇区号标识了每个分区在整个磁盘上的位置和范围
+         *      操作系统需要知道每个分区的起始位置，才能正确的管理和访问分区上的文件数据
+         *      文件系统的超级块、索引节点等元数据都存储在分区的开始位置
+         */
+        struct hd_geometry geo;
 
         if (!dev->d_ops->ioctl(dev, HDIO_GETGEO, &geo)) {
             dev->d_heads = geo.heads;
-            dev->d_sectors_per_track = geo.sectors;
-            ntfs_log_debug("HDIO_GETGEO heads = %u, sectors per "
-                    "track = %u\n", dev->d_heads,
-                    dev->d_sectors_per_track);
+            dev->d_sectors_per_track = geo.sectors; // 每个磁道包含的扇区数
+            ntfs_log_debug("HDIO_GETGEO heads = %u, sectors per track = %u\n", dev->d_heads, dev->d_sectors_per_track);
             return 0;
         }
         err = errno;
@@ -857,8 +866,7 @@ int ntfs_device_sector_size_get(struct ntfs_device *dev)
         int sect_size = 0;
 
         if (!dev->d_ops->ioctl(dev, BLKSSZGET, &sect_size)) {
-            ntfs_log_debug("BLKSSZGET sector size = %d bytes\n",
-                    sect_size);
+            ntfs_log_debug("BLKSSZGET sector size = %d bytes\n", sect_size);
             return sect_size;
         }
     }

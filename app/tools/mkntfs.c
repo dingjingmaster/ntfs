@@ -3487,9 +3487,7 @@ static BOOL mkntfs_open_partition(ntfs_volume *vol)
     unsigned long mnt_flags;
 
     /**
-     * Allocate and initialize an ntfs device structure and attach it to
-     * the volume.
-     * 此处 设备读写？
+     * 此处 设备读写，对 Linux C 读写等函数做了封装，所有信息放到 vol->dev 中
      */
     vol->dev = ntfs_device_alloc(opts.dev_name, 0, &ntfs_device_default_io_ops, NULL);
     if (!vol->dev) {
@@ -3497,7 +3495,9 @@ static BOOL mkntfs_open_partition(ntfs_volume *vol)
         goto done;
     }
 
-    /* Open the device for reading or reading and writing. */
+    /**
+     * opts.no_action 命令行输入，是否执行实际的格式化磁盘操作
+     */
     if (opts.no_action) {
         ntfs_log_quiet("Running in READ-ONLY mode!\n");
         i = O_RDONLY;
@@ -3506,15 +3506,22 @@ static BOOL mkntfs_open_partition(ntfs_volume *vol)
         i = O_RDWR;
     }
 
+    /**
+     * 打开磁盘
+     */
     if (vol->dev->d_ops->open(vol->dev, i)) {
-        if (errno == ENOENT)
+        if (errno == ENOENT) {
             ntfs_log_error("The device doesn't exist; did you specify it correctly?\n");
-        else
+        }
+        else {
             ntfs_log_perror("Could not open %s", vol->dev->d_name);
+        }
         goto done;
     }
 
-    /* Verify we are dealing with a block device. */
+    /**
+     * 获取磁盘信息，相当于执行 stat 操作
+     */
     if (vol->dev->d_ops->stat(vol->dev, &sbuf)) {
         ntfs_log_perror("Error getting information about %s", vol->dev->d_name);
         goto done;
@@ -3532,24 +3539,27 @@ static BOOL mkntfs_open_partition(ntfs_volume *vol)
                 goto done;
             }
             if (opts.sector_size) {
-                if (sbuf.st_size)
+                if (sbuf.st_size) {
                     opts.num_sectors = sbuf.st_size / opts.sector_size;
-                else
+                }
+                else {
                     opts.num_sectors = ((s64)sbuf.st_blocks << 9) / opts.sector_size;
-            } else {
-                if (sbuf.st_size)
+                }
+            }
+            else {
+                if (sbuf.st_size) {
                     opts.num_sectors = sbuf.st_size / 512;
-                else
+                }
+                else {
                     opts.num_sectors = sbuf.st_blocks;
+                }
                 opts.sector_size = 512;
             }
         }
         ntfs_log_warning("mkntfs forced anyway.\n");
 #ifdef HAVE_LINUX_MAJOR_H
-    } else if ((IDE_DISK_MAJOR(MAJOR(sbuf.st_rdev)) &&
-            MINOR(sbuf.st_rdev) % 64 == 0) ||
-            (SCSI_DISK_MAJOR(MAJOR(sbuf.st_rdev)) &&
-            MINOR(sbuf.st_rdev) % 16 == 0)) {
+    }
+    else if ((IDE_DISK_MAJOR(MAJOR(sbuf.st_rdev)) && MINOR(sbuf.st_rdev) % 64 == 0) || (SCSI_DISK_MAJOR(MAJOR(sbuf.st_rdev)) && MINOR(sbuf.st_rdev) % 16 == 0)) {
         ntfs_log_error("%s is entire device, not just one partition.\n", vol->dev->d_name);
         if (!opts.force) {
             ntfs_log_error("Refusing to make a filesystem here!\n");
@@ -3559,10 +3569,13 @@ static BOOL mkntfs_open_partition(ntfs_volume *vol)
 #endif
     }
 
-    /* Make sure the file system is not mounted. */
+    /**
+     * 根据 /etc/mtab 确认是否挂载
+     */
     if (ntfs_check_if_mounted(vol->dev->d_name, &mnt_flags)) {
         ntfs_log_perror("Failed to determine whether %s is mounted", vol->dev->d_name);
-    } else if (mnt_flags & NTFS_MF_MOUNTED) {
+    }
+    else if (mnt_flags & NTFS_MF_MOUNTED) {
         ntfs_log_error("%s is mounted.\n", vol->dev->d_name);
         if (!opts.force) {
             ntfs_log_error("Refusing to make a filesystem here!\n");
@@ -3571,6 +3584,7 @@ static BOOL mkntfs_open_partition(ntfs_volume *vol)
         ntfs_log_warning("mkntfs forced anyway. Hope /etc/mtab is incorrect.\n");
     }
     result = TRUE;
+
 done:
     return result;
 }
@@ -3607,32 +3621,34 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
     if (opts.sector_size < 0) {
         opts.sector_size = ntfs_device_sector_size_get(vol->dev);
         if (opts.sector_size < 0) {
-            ntfs_log_warning("The sector size was not specified "
-                "for %s and it could not be obtained "
-                "automatically.  It has been set to 512 "
-                "bytes.\n", vol->dev->d_name);
+            ntfs_log_warning("The sector size was not specified for %s and it could not be obtained automatically.  It has been set to 512 bytes.\n", vol->dev->d_name);
             opts.sector_size = 512;
         }
     }
+
     /* Validate sector size. */
     if ((opts.sector_size - 1) & opts.sector_size) {
         ntfs_log_error("The sector size is invalid.  It must be a power of two, e.g. 512, 1024.\n");
         return FALSE;
     }
+
     if (opts.sector_size < 256 || opts.sector_size > 4096) {
         ntfs_log_error("The sector size is invalid.  The minimum size is 256 bytes and the maximum is 4096 bytes.\n");
         return FALSE;
     }
-    ntfs_log_debug("sector size = %ld bytes\n", opts.sector_size);
-    /* Now set the device block size to the sector size. */
-    if (ntfs_device_block_size_set(vol->dev, opts.sector_size))
-        ntfs_log_debug("Failed to set the device block size to the "
-                "sector size.  This may cause problems when "
-                "creating the backup boot sector and also may "
-                "affect performance but should be harmless "
-                "otherwise.  Error: %s\n", strerror(errno));
 
-    /* If user didn't specify the number of sectors, determine it now. */
+    ntfs_log_debug("sector size = %ld bytes\n", opts.sector_size);
+
+    /**
+     * 设置扇区大小
+     */
+    if (ntfs_device_block_size_set(vol->dev, opts.sector_size)) {
+        ntfs_log_debug("Failed to set the device block size to the sector size.  This may cause problems when creating the backup boot sector and also may affect performance but should be harmless otherwise.  Error: %s\n", strerror(errno));
+    }
+
+    /**
+     * 扇区数量：测盘总大小 / 扇区大小
+     */
     if (opts.num_sectors < 0) {
         opts.num_sectors = ntfs_device_size_get(vol->dev, opts.sector_size);
         if (opts.num_sectors <= 0) {
@@ -3642,19 +3658,20 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
     }
     ntfs_log_debug("number of sectors = %lld (0x%llx)\n", opts.num_sectors, opts.num_sectors);
 
-    /*
-     * Reserve the last sector for the backup boot sector unless the
-     * sector size is less than 512 bytes in which case reserve 512 bytes
-     * worth of sectors.
+    /**
+     * 预留最后一个扇区作为备份引导扇区
+     *
+     * 如果扇区大小小于512字节，则预留512字节的扇区。
      */
     i = 1;
-    if (opts.sector_size < 512)
+    if (opts.sector_size < 512) {
         i = 512 / opts.sector_size;
+    }
     opts.num_sectors -= i;
 
     /* If user didn't specify the partition start sector, determine it. */
     if (opts.part_start_sect < 0) {
-        opts.part_start_sect = ntfs_device_partition_start_sector_get(vol->dev);
+        opts.part_start_sect = ntfs_device_partition_start_sector_get(vol->dev);    // linux/hdreg.h 中获取磁盘扇区开始位置
         if (opts.part_start_sect < 0) {
             ntfs_log_warning("The partition start sector was not specified for %s and it could not be obtained automatically.  It has been set to 0.\n", vol->dev->d_name);
             opts.part_start_sect = 0;
@@ -3690,7 +3707,9 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
         return FALSE;
     }
 
-    /* If user didn't specify the number of heads, determine it now. */
+    /**
+     * 磁盘磁头数量
+     */
     if (opts.heads < 0) {
         opts.heads = ntfs_device_heads_get(vol->dev);
         if (opts.heads < 0) {
@@ -3708,21 +3727,23 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
         ntfs_log_error("Invalid number of heads.  Maximum is 65535.\n");
         return FALSE;
     }
-    volume_size = opts.num_sectors * opts.sector_size;
+    volume_size = opts.num_sectors * opts.sector_size;  // 磁盘扇区数量 x 磁盘扇区大小 = 磁盘容量
 
-    /* Validate volume size. */
+    /**
+     * 磁盘容量需大于 1MB
+     */
     if (volume_size < (1 << 20)) {            /* 1MiB */
         ntfs_log_error("Device is too small (%llikiB).  Minimum NTFS volume size is 1MiB.\n", (long long)(volume_size / 1024));
         return FALSE;
     }
-    ntfs_log_debug("volume size = %llikiB\n", (long long)(volume_size / 1024));
+    ntfs_log_debug("volume size = %llikiB\n", (long long) (volume_size / 1024));
 
-    /* If user didn't specify the cluster size, determine it now. */
+    /**
+     * cluster size: 文件系统中最小的存储单元，也称 “簇” 或 “区块”
+     * Windows Vista always uses 4096 bytes as the default cluster
+     * size regardless of the volume size so we do it, too.
+     */
     if (!vol->cluster_size) {
-        /*
-         * Windows Vista always uses 4096 bytes as the default cluster
-         * size regardless of the volume size so we do it, too.
-         */
         vol->cluster_size = 4096;
         /* For small volumes on devices with large sector sizes. */
         if (vol->cluster_size < (u32)opts.sector_size)
@@ -3734,6 +3755,7 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
          */
         while (volume_size >> (ffs(vol->cluster_size) - 1 + 32)) {
             vol->cluster_size <<= 1;
+            // 块大小不能大于 2MB
             if (vol->cluster_size >= NTFS_MAX_CLUSTER_SIZE) {
                 ntfs_log_error("Device is too large to hold an NTFS volume (maximum size is 256TiB).\n");
                 return FALSE;
@@ -3742,7 +3764,9 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
         ntfs_log_quiet("Cluster size has been automatically set to %u bytes.\n", (unsigned)vol->cluster_size);
     }
 
-    /* Validate cluster size. */
+    /**
+     * 检测块大小是否是 2 的指数次
+     */
     if (vol->cluster_size & (vol->cluster_size - 1)) {
         ntfs_log_error("The cluster size is invalid.  It must be a power of two, e.g. 1024, 4096.\n");
         return FALSE;
@@ -3757,10 +3781,12 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
         ntfs_log_error("The cluster size is invalid.  It cannot be more that 4096 times the size of the sector size.\n");
         return FALSE;
     }
+
     if (vol->cluster_size > NTFS_MAX_CLUSTER_SIZE) {
         ntfs_log_error("The cluster size is invalid.  The maximum cluster size is %lu bytes (%lukiB).\n", (unsigned long)NTFS_MAX_CLUSTER_SIZE, (unsigned long)(NTFS_MAX_CLUSTER_SIZE >> 10));
         return FALSE;
     }
+
     vol->cluster_size_bits = ffs(vol->cluster_size) - 1;
     ntfs_log_debug("cluster size = %u bytes\n", (unsigned int)vol->cluster_size);
     if (vol->cluster_size > 4096) {
@@ -3773,6 +3799,8 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
         }
         ntfs_log_warning("Windows cannot use compression when the cluster size is larger than 4096 bytes. Compression has been disabled for this volume.\n");
     }
+
+    // 块数量
     vol->nr_clusters = volume_size / vol->cluster_size;
 
     /*
@@ -3780,11 +3808,7 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
      * sector_size and num_sectors. And check both of these for consistency
      * with volume_size.
      */
-    if ((vol->nr_clusters != ((opts.num_sectors * opts.sector_size) /
-            vol->cluster_size) ||
-            (volume_size / opts.sector_size) != opts.num_sectors ||
-            (volume_size / vol->cluster_size) !=
-            vol->nr_clusters)) {
+    if ((vol->nr_clusters != ((opts.num_sectors * opts.sector_size) / vol->cluster_size) || (volume_size / opts.sector_size) != opts.num_sectors || (volume_size / vol->cluster_size) != vol->nr_clusters)) {
         /* XXX is this code reachable? */
         ntfs_log_error("Illegal combination of volume/cluster/sector size and/or cluster/sector number.\n");
         return FALSE;
@@ -3800,7 +3824,7 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
         ntfs_log_error("Number of clusters exceeds 32 bits.  Please try again with a larger\ncluster size or leave the cluster size unspecified and the smallest possible cluster size for the size of the device will be used.\n");
         return FALSE;
     }
-    page_size = mkntfs_get_page_size();
+    page_size = mkntfs_get_page_size();     // memory page size
 
     /**
      * Set the mft record size.  By default this is 1024 but it has to be
@@ -3808,6 +3832,13 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
      * or the NTFS kernel driver will not be able to mount the volume.
      * TODO: The mft record size should be user specifiable just like the
      * "inode size" can be specified on other Linux/Unix file systems.
+     *
+     * Master File Table(MFT)的大小
+     *
+     * MFT用来管理文件和目录的元数据信息，MFT中每一条记录对应一个文件或目录
+     *  mft_record_size 是 NTFS 中每一条MFT记录的大小
+     *  较小的MFT减少磁盘空间浪费，增加MFT查找和访问开销
+     *  较大的MFT提高MFT的访问性能，但会浪费更多的磁盘空间
      */
     vol->mft_record_size = 1024;
     if (vol->mft_record_size < (u32)opts.sector_size)
@@ -3822,6 +3853,11 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
      * at least as big as a sector and not bigger than a page on the system
      * or the NTFS kernel driver will not be able to mount the volume.
      * FIXME: Should we make the index record size to be user specifiable?
+     *
+     * NTFS使用索引来加快文件和目录的查找和访问。索引记录保存了文件和目录的元数据信息
+     * index_record_size 就是NTFS中每个索引记录的大小
+     *  较小的索引大小可以减少磁盘空间的浪费，但是增加了索引查找的开销
+     *  较大的索引大小可以提高索引的查找性能，但会浪费更多的磁盘空间
      */
     vol->indx_record_size = 4096;
     if (vol->indx_record_size < (u32)opts.sector_size)
@@ -4390,10 +4426,8 @@ static BOOL mkntfs_create_root_structures(void)
      * of that file (only for $MFT is the sequence number 1 rather than 0).
      */
     for (i = 0; i < nr_sysfiles; i++) {
-        if (ntfs_mft_record_layout(g_vol, 0, m = (MFT_RECORD *)(g_buf +
-                i * g_vol->mft_record_size))) {
-            ntfs_log_error("Failed to layout system mft records."
-                    "\n");
+        if (ntfs_mft_record_layout(g_vol, 0, m = (MFT_RECORD *)(g_buf + i * g_vol->mft_record_size))) {
+            ntfs_log_error("Failed to layout system mft records.\n");
             return FALSE;
         }
         if (i == 0 || i > 23)
@@ -5021,10 +5055,14 @@ static int mkntfs_redirect(struct mkntfs_options *opts2)
     memcpy(g_vol->attrdef, attrdef_ntfs3x_array, sizeof(attrdef_ntfs3x_array));
     g_vol->attrdef_len = sizeof(attrdef_ntfs3x_array);
 
-    /* Open the partition. */
-    // 打开设备、获取设备信息stat、确认设备未挂载
-    if (!mkntfs_open_partition(g_vol))
+    /**
+     * 1. 打开设备、获取设备信息stat、确认设备未挂载，
+     * 2. 设置设备操作函数（读写）
+     */
+    if (!mkntfs_open_partition(g_vol)) {
         goto done;
+    }
+
     /*
      * Decide on the sector size, cluster size, mft record and index record
      * sizes as well as the number of sectors/tracks/heads/size, etc.
@@ -5177,9 +5215,17 @@ done:
  *
  * Start from here.
  *
+ * NTFS文件系统的布局：
+ *  | BOOT | MFT | Free Space | More Meta data | Free Space |
+ *
+ *  - BOOT 块中信息定位 MFT 偏移量.
+ *  - 根目录在 MFT 中记录
+ *
+ *  -- NTFS 中 Boot 结构 4K
+ *
  * Return:
  *  0  Success, the program worked
- *    1  Error, something went wrong
+ *  1  Error, something went wrong
  */
 int main(int argc, char *argv[])
 {
