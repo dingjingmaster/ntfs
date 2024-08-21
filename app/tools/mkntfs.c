@@ -846,14 +846,15 @@ static BOOL append_to_bad_blocks(unsigned long long block)
 /**
  * mkntfs_write
  */
-static long long mkntfs_write(struct ntfs_device *dev,
-        const void *b, long long count)
+static long long mkntfs_write(struct ntfs_device *dev, const void *b, long long count)
 {
     long long bytes_written, total;
     int retry;
 
-    if (opts.no_action)
+    if (opts.no_action) {
         return count;
+    }
+
     total = 0LL;
     retry = 0;
     do {
@@ -863,16 +864,20 @@ static long long mkntfs_write(struct ntfs_device *dev,
             ntfs_log_perror("Error writing to %s", dev->d_name);
             errno = retry;
             return bytes_written;
-        } else if (!bytes_written) {
+        }
+        else if (!bytes_written) {
             retry++;
-        } else {
+        }
+        else {
             count -= bytes_written;
             total += bytes_written;
         }
     } while (count && retry < 3);
-    if (count)
-        ntfs_log_error("Failed to complete writing to %s after three retries."
-            "\n", dev->d_name);
+
+    if (count) {
+        ntfs_log_error("Failed to complete writing to %s after three retries.\n", dev->d_name);
+    }
+
     return total;
 }
 
@@ -4178,7 +4183,7 @@ static BOOL mkntfs_initialize_rl_boot(void)
     g_rl_boot[1].length = 0LL;
 
     /* Allocate clusters for $Boot. */
-    return (bitmap_allocate(0,j));
+    return (bitmap_allocate(0, j));
 }
 
 /**
@@ -4188,8 +4193,9 @@ static BOOL mkntfs_initialize_rl_bad(void)
 {
     /* Create runlist for $BadClus, $DATA named stream $Bad. */
     g_rl_bad = ntfs_malloc(2 * sizeof(runlist));
-    if (!g_rl_bad)
+    if (!g_rl_bad) {
         return FALSE;
+    }
 
     g_rl_bad[0].vcn = 0LL;
     g_rl_bad[0].lcn = -1LL;
@@ -4211,7 +4217,7 @@ static BOOL mkntfs_initialize_rl_bad(void)
  */
 static BOOL mkntfs_fill_device_with_zeroes(void)
 {
-    /*
+    /**
      * If not quick format, fill the device with 0s.
      * FIXME: Except bad blocks! (AIA)
      */
@@ -4224,58 +4230,52 @@ static BOOL mkntfs_fill_device_with_zeroes(void)
     volume_size = g_vol->nr_clusters << g_vol->cluster_size_bits;
 
     ntfs_log_progress("Initializing device with zeroes:   0%%");
-    for (position = 0; position < (unsigned long long)g_vol->nr_clusters;
-            position++) {
-        if (!(position % (int)(progress_inc+1))) {
-            ntfs_log_progress("\b\b\b\b%3.0f%%", position /
-                    progress_inc);
+    for (position = 0; position < (unsigned long long)g_vol->nr_clusters; position++) {
+        if (!(position % (int)(progress_inc + 1))) {
+            ntfs_log_progress("\b\b\b\b%3.0f%%", position / progress_inc);
         }
+
         bw = mkntfs_write(g_vol->dev, g_buf, g_vol->cluster_size);
         if (bw != (ssize_t)g_vol->cluster_size) {
             if (bw != -1 || errno != EIO) {
                 ntfs_log_error("This should not happen.\n");
                 return FALSE;
             }
+
             if (!position) {
-                ntfs_log_error("Error: Cluster zero is bad. "
-                    "Cannot create NTFS file "
-                    "system.\n");
+                ntfs_log_error("Error: Cluster zero is bad. Cannot create NTFS file system.\n");
                 return FALSE;
             }
+
             /* Add the baddie to our bad blocks list. */
-            if (!append_to_bad_blocks(position))
+            if (!append_to_bad_blocks(position)) {
                 return FALSE;
-            ntfs_log_quiet("\nFound bad cluster (%lld). Adding to "
-                "list of bad blocks.\nInitializing "
-                "device with zeroes: %3.0f%%", position,
-                position / progress_inc);
+            }
+            ntfs_log_quiet("\nFound bad cluster (%lld). Adding to list of bad blocks.\nInitializing device with zeroes: %3.0f%%", position, position / progress_inc);
+
             /* Seek to next cluster. */
-            g_vol->dev->d_ops->seek(g_vol->dev,
-                    ((off_t)position + 1) *
-                    g_vol->cluster_size, SEEK_SET);
+            g_vol->dev->d_ops->seek(g_vol->dev, ((off_t) position + 1) * g_vol->cluster_size, SEEK_SET);
         }
     }
     ntfs_log_progress("\b\b\b\b100%%");
-    position = (volume_size & (g_vol->cluster_size - 1)) /
-            opts.sector_size;
+    position = (volume_size & (g_vol->cluster_size - 1)) / opts.sector_size;
     for (i = 0; (unsigned long)i < position; i++) {
         bw = mkntfs_write(g_vol->dev, g_buf, opts.sector_size);
         if (bw != opts.sector_size) {
             if (bw != -1 || errno != EIO) {
                 ntfs_log_error("This should not happen.\n");
                 return FALSE;
-            } else if (i + 1ull == position) {
-                ntfs_log_error("Error: Bad cluster found in "
-                    "location reserved for system "
-                    "file $Boot.\n");
+            }
+            else if (i + 1ull == position) {
+                ntfs_log_error("Error: Bad cluster found in location reserved for system file $Boot.\n");
                 return FALSE;
             }
             /* Seek to next sector. */
-            g_vol->dev->d_ops->seek(g_vol->dev,
-                    opts.sector_size, SEEK_CUR);
+            g_vol->dev->d_ops->seek(g_vol->dev, opts.sector_size, SEEK_CUR);
         }
     }
     ntfs_log_progress(" - Done.\n");
+
     return TRUE;
 }
 
@@ -4285,8 +4285,7 @@ static BOOL mkntfs_fill_device_with_zeroes(void)
  * (ERSO) made a function out of this, but the reason for doing that
  * disappeared during coding....
  */
-static BOOL mkntfs_sync_index_record(INDEX_ALLOCATION* idx, MFT_RECORD* m,
-        ntfschar* name, u32 name_len)
+static BOOL mkntfs_sync_index_record(INDEX_ALLOCATION* idx, MFT_RECORD* m, ntfschar* name, u32 name_len)
 {
     int i, err;
     ntfs_attr_search_ctx *ctx;
@@ -4458,7 +4457,7 @@ static BOOL mkntfs_create_root_structures(void)
 
     ntfs_log_quiet("Creating NTFS volume structures.\n");
     nr_sysfiles = 27;
-    /*
+    /**
      * Setup an empty mft record.  Note, we can just give 0 as the mft
      * reference as we are creating an NTFS 1.2 volume for which the mft
      * reference is ignored by ntfs_mft_record_layout().
@@ -4472,22 +4471,22 @@ static BOOL mkntfs_create_root_structures(void)
             ntfs_log_error("Failed to layout system mft records.\n");
             return FALSE;
         }
-        if (i == 0 || i > 23)
+        if (i == 0 || i > 23) {
             m->sequence_number = const_cpu_to_le16(1);
-        else
+        }
+        else {
             m->sequence_number = cpu_to_le16(i);
+        }
     }
-    /*
+    /**
      * If only one cluster contains all system files then
      * fill the rest of it with empty, formatted records.
      */
     if (nr_sysfiles * (s32)g_vol->mft_record_size < g_mft_size) {
-        for (i = nr_sysfiles;
-              i * (s32)g_vol->mft_record_size < g_mft_size; i++) {
+        for (i = nr_sysfiles; i * (s32)g_vol->mft_record_size < g_mft_size; i++) {
             m = (MFT_RECORD *)(g_buf + i * g_vol->mft_record_size);
             if (ntfs_mft_record_layout(g_vol, 0, m)) {
-                ntfs_log_error("Failed to layout mft record."
-                        "\n");
+                ntfs_log_error("Failed to layout mft record.\n");
                 return FALSE;
             }
             m->flags = const_cpu_to_le16(0);
@@ -4500,7 +4499,6 @@ static BOOL mkntfs_create_root_structures(void)
      */
     for (i = 0; i < nr_sysfiles; i++) {
         le32 file_attrs;
-
         m = (MFT_RECORD*)(g_buf + i * g_vol->mft_record_size);
         if (i < 16 || i > 23) {
             m->mft_record_number = cpu_to_le32(i);
@@ -4510,21 +4508,21 @@ static BOOL mkntfs_create_root_structures(void)
         file_attrs = FILE_ATTR_HIDDEN | FILE_ATTR_SYSTEM;
         if (i == FILE_root) {
             file_attrs |= FILE_ATTR_ARCHIVE;
-            if (opts.disable_indexing)
+            if (opts.disable_indexing) {
                 file_attrs |= FILE_ATTR_NOT_CONTENT_INDEXED;
-            if (opts.enable_compression)
+            }
+            if (opts.enable_compression) {
                 file_attrs |= FILE_ATTR_COMPRESSED;
+            }
         }
         /* setting specific security_id flag and */
         /* file permissions for ntfs 3.x */
-        if (i == 0 || i == 1 || i == 2 || i == 6 || i == 8 ||
-                i == 10) {
-            add_attr_std_info(m, file_attrs,
-                const_cpu_to_le32(0x0100));
-        } else if (i == 9) {
+        if (i == 0 || i == 1 || i == 2 || i == 6 || i == 8 || i == 10) {
+            add_attr_std_info(m, file_attrs, const_cpu_to_le32(0x0100));
+        }
+        else if (i == 9) {
             file_attrs |= FILE_ATTR_VIEW_INDEX_PRESENT;
-            add_attr_std_info(m, file_attrs,
-                const_cpu_to_le32(0x0101));
+            add_attr_std_info(m, file_attrs, const_cpu_to_le32(0x0101));
         } else if (i == 11) {
             add_attr_std_info(m, file_attrs,
                 const_cpu_to_le32(0x0101));
@@ -5144,13 +5142,16 @@ static int mkntfs_redirect(struct mkntfs_options *opts2)
     }
 
     /* Allocate a buffer large enough to hold the mft. */
+    printf("MFT size: %d\n", g_mft_size);
     g_buf = ntfs_calloc(g_mft_size);
-    if (!g_buf)
+    if (!g_buf) {
         goto done;
+    }
 
     /* Create runlist for $BadClus, $DATA named stream $Bad. */
-    if (!mkntfs_initialize_rl_bad())
+    if (!mkntfs_initialize_rl_bad()) {
         goto done;
+    }
 
     /* If not quick format, fill the device with 0s. */
     if (!opts.quick_format) {
@@ -5160,8 +5161,10 @@ static int mkntfs_redirect(struct mkntfs_options *opts2)
     }
 
     /* Create NTFS volume structures. */
-    if (!mkntfs_create_root_structures())
+    if (!mkntfs_create_root_structures()) {
         goto done;
+    }
+
     /*
      * - Do not step onto bad blocks!!!
      * - If any bad blocks were specified or found, modify $BadClus,

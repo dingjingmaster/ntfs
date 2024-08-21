@@ -42,11 +42,11 @@
  */
 void *ntfs_calloc(size_t size)
 {
-    void *p;
-
-    p = calloc(1, size);
-    if (!p)
+    void *p = calloc(1, size);
+    if (!p) {
         ntfs_log_perror("Failed to calloc %lld bytes", (long long)size);
+    }
+
     return p;
 }
 

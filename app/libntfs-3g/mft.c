@@ -398,8 +398,7 @@ err_out:
  *
  * On success return 0 and on error return -1 with errno set to the error code.
  */
-int ntfs_mft_record_layout(const ntfs_volume *vol, const MFT_REF mref,
-		MFT_RECORD *mrec)
+int ntfs_mft_record_layout(const ntfs_volume *vol, const MFT_REF mref, MFT_RECORD *mrec)
 {
 	ATTR_RECORD *a;
 
@@ -408,9 +407,11 @@ int ntfs_mft_record_layout(const ntfs_volume *vol, const MFT_REF mref,
 		ntfs_log_perror("%s: mrec=%p", __FUNCTION__, mrec);
 		return -1;
 	}
+
 	/* Aligned to 2-byte boundary. */
-	if (vol->major_ver < 3 || (vol->major_ver == 3 && !vol->minor_ver))
-		mrec->usa_ofs = cpu_to_le16((sizeof(MFT_RECORD_OLD) + 1) & ~1);
+	if (vol->major_ver < 3 || (vol->major_ver == 3 && !vol->minor_ver)) {
+        mrec->usa_ofs = cpu_to_le16((sizeof(MFT_RECORD_OLD) + 1) & ~1);
+    }
 	else {
 		/* Abort if mref is > 32 bits. */
 		if (MREF(mref) & 0x0000ffff00000000ull) {
@@ -419,7 +420,7 @@ int ntfs_mft_record_layout(const ntfs_volume *vol, const MFT_REF mref,
 			return -1;
 		}
 		mrec->usa_ofs = cpu_to_le16((sizeof(MFT_RECORD) + 1) & ~1);
-		/*
+		/**
 		 * Set the NTFS 3.1+ specific fields while we know that the
 		 * volume version is 3.1+.
 		 */
@@ -427,41 +428,39 @@ int ntfs_mft_record_layout(const ntfs_volume *vol, const MFT_REF mref,
 		mrec->mft_record_number = cpu_to_le32(MREF(mref));
 	}
 	mrec->magic = magic_FILE;
-	if (vol->mft_record_size >= NTFS_BLOCK_SIZE)
-		mrec->usa_count = cpu_to_le16(vol->mft_record_size /
-				NTFS_BLOCK_SIZE + 1);
+	if (vol->mft_record_size >= NTFS_BLOCK_SIZE) {
+        mrec->usa_count = cpu_to_le16(vol->mft_record_size / NTFS_BLOCK_SIZE + 1);
+    }
 	else {
 		mrec->usa_count = const_cpu_to_le16(1);
-		ntfs_log_error("Sector size is bigger than MFT record size.  "
-				"Setting usa_count to 1.  If Windows chkdsk "
-				"reports this as corruption, please email %s "
-				"stating that you saw this message and that "
-				"the file system created was corrupt.  "
-				"Thank you.\n", NTFS_DEV_LIST);
+		ntfs_log_error("Sector size is bigger than MFT record size. Setting usa_count to 1. If Windows chkdsk reports this as corruption, please email %s stating that you saw this message and that the file system created was corrupt. Thank you.\n", NTFS_DEV_LIST);
 	}
+
 	/* Set the update sequence number to 1. */
 	*(le16*)((u8*)mrec + le16_to_cpu(mrec->usa_ofs)) = const_cpu_to_le16(1);
 	mrec->lsn = const_cpu_to_sle64(0ll);
 	mrec->sequence_number = const_cpu_to_le16(1);
 	mrec->link_count = const_cpu_to_le16(0);
+
 	/* Aligned to 8-byte boundary. */
-	mrec->attrs_offset = cpu_to_le16((le16_to_cpu(mrec->usa_ofs) +
-			(le16_to_cpu(mrec->usa_count) << 1) + 7) & ~7);
+	mrec->attrs_offset = cpu_to_le16((le16_to_cpu(mrec->usa_ofs) + (le16_to_cpu(mrec->usa_count) << 1) + 7) & ~7);
 	mrec->flags = const_cpu_to_le16(0);
-	/*
+
+	/**
 	 * Using attrs_offset plus eight bytes (for the termination attribute),
 	 * aligned to 8-byte boundary.
 	 */
-	mrec->bytes_in_use = cpu_to_le32((le16_to_cpu(mrec->attrs_offset) + 8 +
-			7) & ~7);
+	mrec->bytes_in_use = cpu_to_le32((le16_to_cpu(mrec->attrs_offset) + 8 + 7) & ~7);
 	mrec->bytes_allocated = cpu_to_le32(vol->mft_record_size);
 	mrec->base_mft_record = const_cpu_to_le64((MFT_REF)0);
 	mrec->next_attr_instance = const_cpu_to_le16(0);
 	a = (ATTR_RECORD*)((u8*)mrec + le16_to_cpu(mrec->attrs_offset));
 	a->type = AT_END;
 	a->length = const_cpu_to_le32(0);
+
 	/* Finally, clear the unused part of the mft record. */
 	memset((u8*)a + 8, 0, vol->mft_record_size - ((u8*)a + 8 - (u8*)mrec));
+
 	return 0;
 }
 
