@@ -188,30 +188,30 @@ struct UPCASEINFO
  * g_mft_lcn 是一个全局变量，用于记录MFT的起始逻辑簇号。它告诉文件系统MFT从磁盘哪个位置开始存储。这个信息在文件系统初始化和文件访问时候非常重要。
  *
  */
-static u8*                      g_buf                   = NULL;
-static int                      g_mft_bitmap_byte_size  = 0;
-static u8*                      g_mft_bitmap            = NULL;
-static int                      g_lcn_bitmap_byte_size  = 0;
-static int                      g_dynamic_buf_size      = 0;
-static u8*                      g_dynamic_buf           = NULL;
-static struct UPCASEINFO*       g_upcaseinfo            = NULL;
-static runlist*                 g_rl_mft                = NULL;
-static runlist*                 g_rl_mft_bmp            = NULL;
-static runlist*                 g_rl_mftmirr            = NULL;
-static runlist*                 g_rl_logfile            = NULL;
-static runlist*                 g_rl_boot               = NULL;
-static runlist*                 g_rl_bad                = NULL;
+static u8*                      g_buf                   = NULL;     // 每次操作写入大小，块/簇，默认 27K。
+static int                      g_mft_bitmap_byte_size  = 0;        // 默认 8。
+static u8*                      g_mft_bitmap            = NULL;     // 默认：长度8的buffer。
+static int                      g_lcn_bitmap_byte_size  = 0;        // 磁盘所有簇对应的位图（一个簇4096），必须是8的倍数
+static int                      g_dynamic_buf_size      = 0;        // 4096，一页内存大小
+static u8*                      g_dynamic_buf           = NULL;     // ???
+static struct UPCASEINFO*       g_upcaseinfo            = NULL;     // 大小转换信息
+static runlist*                 g_rl_mft                = NULL;     // MFT runlist...
+static runlist*                 g_rl_mft_bmp            = NULL;     // MFT runlist，默认 2 个。
+static runlist*                 g_rl_mftmirr            = NULL;     // MFT runlist 备份
+static runlist*                 g_rl_logfile            = NULL;     // logfile runlist
+static runlist*                 g_rl_boot               = NULL;     // boot runlist
+static runlist*                 g_rl_bad                = NULL;     // 坏 簇/块 runlist
 static INDEX_ALLOCATION*        g_index_block           = NULL;
 static ntfs_volume*             g_vol                   = NULL;
-static int                      g_mft_size              = 0;
-static long long                g_mft_lcn               = 0;        /* lcn(Logical Cluster Number) of $MFT, $DATA attribute */
+static int                      g_mft_size              = 0;        // 默认 27KB
+static long long                g_mft_lcn               = 0;        /* > 16kib，存储了NTFS中主文件表的逻辑簇号。lcn(Logical Cluster Number) of $MFT, $DATA attribute */
 static long long                g_mftmirr_lcn           = 0;        /* lcn of $MFTMirr, $DATA */
-static long long                g_logfile_lcn           = 0;        /* lcn of $LogFile, $DATA */
-static int                      g_logfile_size          = 0;        /* in bytes, determined from volume_size */
-static long long                g_mft_zone_end          = 0;        /* Determined from volume_size and mft_zone_multiplier, in clusters */
+static long long                g_logfile_lcn           = 0;        /* 紧随 MFT备份的runlist后。lcn of $LogFile, $DATA */
+static int                      g_logfile_size          = 0;        /* logfile 大小。in bytes, determined from volume_size */
+static long long                g_mft_zone_end          = 0;        /* 默认：块总数/8（12.5%）。Determined from volume_size and mft_zone_multiplier, in clusters */
 static long long                g_num_bad_blocks        = 0;        /* Number of bad clusters */
 static long long*               g_bad_blocks            = NULL;     /* Array of bad clusters */
-static struct BITMAP_ALLOCATION*g_allocation            = NULL;     /* Head of cluster allocations */
+static struct BITMAP_ALLOCATION*g_allocation            = NULL;     /* 簇/块的起始地址。Head of cluster allocations */
 
 /**
  * struct mkntfs_options
@@ -353,19 +353,23 @@ static uint64_t crc64(uint64_t crc, const byte * data, size_t size)
         for (i = 0;  i < 256;  i++) {
             c = i;
             for (j = 0;  j < 8;  j++) {
-                if (c & 1)
+                if (c & 1) {
                     c = polynomial ^ (c >> 1);
-                else
+                }
+                else {
                     c = (c >> 1);
+                }
             }
             table[i] = c;
         }
-    } else
+    }
+    else {
         while (size) {
             crc = table[(crc ^ *data) & 0xff] ^ (crc >> 8);
             size--;
             data++;
         }
+    }
 
     crc ^= xorout;
 
@@ -375,9 +379,10 @@ static uint64_t crc64(uint64_t crc, const byte * data, size_t size)
 /*
  * Mark a run of clusters as allocated
  *
+ * lcn = 2, length = 1;
+ *
  * Returns FALSE if unsuccessful
  */
-
 static BOOL bitmap_allocate(LCN lcn, s64 length)
 {
     BOOL done;
@@ -396,8 +401,7 @@ static BOOL bitmap_allocate(LCN lcn, s64 length)
             p = p->next;
         }
 
-        // q 前一个
-        // p 当前
+        // q 前一个, p 当前
         /* make sure the requested lcns were not allocated */
         if ((q && ((q->lcn + q->length) > lcn)) || (p && ((lcn + length) > p->lcn))) {
             ntfs_log_error("Bitmap allocation error\n");
@@ -817,8 +821,10 @@ static ntfs_time mkntfs_time(void)
 
     ts.tv_sec = 0;
     ts.tv_nsec = 0;
-    if (!opts.use_epoch_time)
+    if (!opts.use_epoch_time) {
         ts.tv_sec = time(NULL);
+    }
+
     return timespec2ntfs(ts);
 }
 
@@ -830,11 +836,9 @@ static BOOL append_to_bad_blocks(unsigned long long block)
     long long *new_buf;
 
     if (!(g_num_bad_blocks & 15)) {
-        new_buf = realloc(g_bad_blocks, (g_num_bad_blocks + 16) *
-                            sizeof(long long));
+        new_buf = realloc(g_bad_blocks, (g_num_bad_blocks + 16) * sizeof(long long));
         if (!new_buf) {
-            ntfs_log_perror("Reallocating memory for bad blocks "
-                "list failed");
+            ntfs_log_perror("Reallocating memory for bad blocks list failed");
             return FALSE;
         }
         g_bad_blocks = new_buf;
@@ -3504,7 +3508,10 @@ static void mkntfs_cleanup(void)
 
 
 /**
- * mkntfs_open_partition -
+ * @brief mkntfs_open_partition -
+ *
+ * 1. 打开设备、获取设备信息stat、确认设备未挂载，
+ * 2. 设置设备操作函数（读写）
  */
 static BOOL mkntfs_open_partition(ntfs_volume *vol)
 {
@@ -3635,7 +3642,18 @@ static long mkntfs_get_page_size(void)
 }
 
 /**
- * mkntfs_override_vol_params -
+ * @brief mkfs_override_vol_params
+ * Decide on the sector size, cluster size, mft record and index record sizes as well as the number of sectors/tracks/heads/size, etc.
+ *  - 扇区大小
+ *  - 扇区数量
+ *  - 最后一个扇区作为引导备份扇区(512 byte)
+ *  - 磁头数量
+ *  - 块大小
+ *  - 块数量
+ *  - 容量检测
+ *  - mft大小设置
+ *  - index大小设置
+ * 这个函数主要根据输入参数设置NTFS属性大小、检查属性是否处于合理范围
  */
 static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
 {
@@ -3716,6 +3734,9 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
     }
 
     /* If user didn't specify the sectors per track, determine it now. */
+    /**
+     * 每个track多少扇区
+     */
     if (opts.sectors_per_track < 0) {
         opts.sectors_per_track = ntfs_device_sectors_per_track_get(vol->dev);
         if (opts.sectors_per_track < 0) {
@@ -3754,7 +3775,7 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
         ntfs_log_error("Invalid number of heads.  Maximum is 65535.\n");
         return FALSE;
     }
-    volume_size = opts.num_sectors * opts.sector_size;  // 磁盘扇区数量 x 磁盘扇区大小 = 磁盘容量
+    volume_size = opts.num_sectors * opts.sector_size;  // 磁盘扇区数量 x 磁盘扇区大小 = 磁盘总容量
 
     /**
      * 磁盘容量需大于 1MB
@@ -3773,9 +3794,10 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
     if (!vol->cluster_size) {
         vol->cluster_size = 4096;
         /* For small volumes on devices with large sector sizes. */
-        if (vol->cluster_size < (u32)opts.sector_size)
+        if (vol->cluster_size < (u32)opts.sector_size) {
             vol->cluster_size = opts.sector_size;
-        /*
+        }
+        /**
          * For huge volumes, grow the cluster size until the number of
          * clusters fits into 32 bits or the cluster size exceeds the
          * maximum limit of NTFS_MAX_CLUSTER_SIZE.
@@ -3827,7 +3849,7 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
         ntfs_log_warning("Windows cannot use compression when the cluster size is larger than 4096 bytes. Compression has been disabled for this volume.\n");
     }
 
-    // 块数量
+    // 簇/块 数量
     vol->nr_clusters = volume_size / vol->cluster_size;
 
     /*
@@ -3835,7 +3857,9 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
      * sector_size and num_sectors. And check both of these for consistency
      * with volume_size.
      */
-    if ((vol->nr_clusters != ((opts.num_sectors * opts.sector_size) / vol->cluster_size) || (volume_size / opts.sector_size) != opts.num_sectors || (volume_size / vol->cluster_size) != vol->nr_clusters)) {
+    if ((vol->nr_clusters != ((opts.num_sectors * opts.sector_size) / vol->cluster_size)
+        || (volume_size / opts.sector_size) != opts.num_sectors
+        || (volume_size / vol->cluster_size) != vol->nr_clusters)) {
         /* XXX is this code reachable? */
         ntfs_log_error("Illegal combination of volume/cluster/sector size and/or cluster/sector number.\n");
         return FALSE;
@@ -3851,7 +3875,7 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
         ntfs_log_error("Number of clusters exceeds 32 bits.  Please try again with a larger\ncluster size or leave the cluster size unspecified and the smallest possible cluster size for the size of the device will be used.\n");
         return FALSE;
     }
-    page_size = mkntfs_get_page_size();     // memory page size
+    page_size = mkntfs_get_page_size();     // memory page size: 4096
 
     /**
      * Set the mft record size.  By default this is 1024 but it has to be
@@ -3868,14 +3892,19 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
      *  较大的MFT提高MFT的访问性能，但会浪费更多的磁盘空间
      */
     vol->mft_record_size = 1024;
-    if (vol->mft_record_size < (u32)opts.sector_size)
+    if (vol->mft_record_size < (u32)opts.sector_size) {
         vol->mft_record_size = opts.sector_size;
-    if (vol->mft_record_size > (unsigned long)page_size)
-        ntfs_log_warning("Mft record size (%u bytes) exceeds system page size (%li bytes).  You will not be able to mount this volume using the NTFS kernel driver.\n", (unsigned)vol->mft_record_size, page_size);
+    }
+    if (vol->mft_record_size > (unsigned long)page_size) {
+        ntfs_log_warning("Mft record size (%u bytes) exceeds system page size (%li bytes). You will not be able to mount this volume using the NTFS kernel driver.\n", (unsigned)vol->mft_record_size, page_size);
+    }
+
+    // ffs 位操作中用于定位下一个可用的位（从低位开始，下一个可被设位1的位置）
+    // 默认值：10
     vol->mft_record_size_bits = ffs(vol->mft_record_size) - 1;
     ntfs_log_debug("mft record size = %u bytes\n", (unsigned)vol->mft_record_size);
 
-    /*
+    /**
      * Set the index record size.  By default this is 4096 but it has to be
      * at least as big as a sector and not bigger than a page on the system
      * or the NTFS kernel driver will not be able to mount the volume.
@@ -3887,10 +3916,13 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
      *  较大的索引大小可以提高索引的查找性能，但会浪费更多的磁盘空间
      */
     vol->indx_record_size = 4096;
-    if (vol->indx_record_size < (u32)opts.sector_size)
+    if (vol->indx_record_size < (u32)opts.sector_size) {
         vol->indx_record_size = opts.sector_size;
-    if (vol->indx_record_size > (unsigned long)page_size)
+    }
+
+    if (vol->indx_record_size > (unsigned long)page_size) {
         ntfs_log_warning("Index record size (%u bytes) exceeds system page size (%li bytes).  You will not be able to mount this volume using the NTFS kernel driver.\n", (unsigned)vol->indx_record_size, page_size);
+    }
     vol->indx_record_size_bits = ffs(vol->indx_record_size) - 1;
     ntfs_log_debug("index record size = %u bytes\n", (unsigned)vol->indx_record_size);
     if (!winboot) {
@@ -3901,7 +3933,11 @@ static BOOL mkntfs_override_vol_params(ntfs_volume *vol)
 }
 
 /**
- * mkntfs_initialize_bitmaps -
+ * @brief mkntfs_initialize_bitmaps -
+ * 初始化 NTFS 文件系统的位图数据结构
+ *
+ * NTFS 文件系统使用位图来跟踪磁盘空间的使用情况。每一个位代表磁盘上的一个簇(cluster)是否被使用
+ * 此函数负责初始化位图数据结构，将整个磁盘分区的所有簇对应的位全部标记为"未使用"状态
  */
 static BOOL mkntfs_initialize_bitmaps(void)
 {
@@ -3913,12 +3949,10 @@ static BOOL mkntfs_initialize_bitmaps(void)
      * (扇区数量 + 7) / 8
      */
     g_lcn_bitmap_byte_size = (g_vol->nr_clusters + 7) >> 3;
-    printf("g_lcn_bitmap_byte_size: %d\n", g_lcn_bitmap_byte_size);
 
     /* Needs to be multiple of 8 bytes. */
-    // 将 (g_lcn_bitmap_byte_size + 7) 结果限定在 (0 - 255) 之间，也就是 8 bit
-    g_lcn_bitmap_byte_size = (g_lcn_bitmap_byte_size + 7) & ~7;
-    i = (g_lcn_bitmap_byte_size + g_vol->cluster_size - 1) & ~(g_vol->cluster_size - 1);
+    g_lcn_bitmap_byte_size = (g_lcn_bitmap_byte_size + 7) & ~7;                             // 8的倍数
+    i = (g_lcn_bitmap_byte_size + g_vol->cluster_size - 1) & ~(g_vol->cluster_size - 1);    // cluster 大小的倍数
     ntfs_log_debug("g_lcn_bitmap_byte_size = %i, allocated = %llu\n", g_lcn_bitmap_byte_size, (unsigned long long)i);
     g_dynamic_buf_size = mkntfs_get_page_size(); // 4096
     g_dynamic_buf = (u8*)ntfs_calloc(g_dynamic_buf_size);
@@ -3932,30 +3966,36 @@ static BOOL mkntfs_initialize_bitmaps(void)
      *
      * $Bitmap可以重叠卷的末尾。该区域内的所有位都必须设置。
      * 该区域还包括引导扇区的备份。
+     *
+     * 簇大小 x 8 - 簇数量
+     *
+     * 每 位 代表一个 族/块
+     * 生成一个 struct BITMAP_ALLOCATION 结构，并指向 g_allocation
      */
     if (!bitmap_allocate(g_vol->nr_clusters, ((s64)g_lcn_bitmap_byte_size << 3) - g_vol->nr_clusters)) {
         return (FALSE);
     }
 
     /**
-     * Mft size is 27 (NTFS 3.0+) mft records or one cluster, whichever is
-     * bigger.
+     * Mft size is 27 (NTFS 3.0+) mft records or one cluster, whichever is bigger.
+     *
+     * Mft 大小取 27 条 mft 所占空间 与 一簇 大小 中 最大者。
      */
     g_mft_size = 27;
-    g_mft_size *= g_vol->mft_record_size;
+    g_mft_size *= g_vol->mft_record_size; // 27K
     if (g_mft_size < (s32)g_vol->cluster_size) {
         g_mft_size = g_vol->cluster_size;
     }
     ntfs_log_debug("MFT size = %i (0x%x) bytes\n", g_mft_size, g_mft_size);
 
     /* Determine mft bitmap size and allocate it. */
-    mft_bitmap_size = g_mft_size / g_vol->mft_record_size;
+    mft_bitmap_size = g_mft_size / g_vol->mft_record_size;      // 7
 
     /* Convert to bytes, at least one. */
-    g_mft_bitmap_byte_size = (mft_bitmap_size + 7) >> 3;
+    g_mft_bitmap_byte_size = (mft_bitmap_size + 7) >> 3;        // 1
 
     /* Mft bitmap is allocated in multiples of 8 bytes. */
-    g_mft_bitmap_byte_size = (g_mft_bitmap_byte_size + 7) & ~7;
+    g_mft_bitmap_byte_size = (g_mft_bitmap_byte_size + 7) & ~7; // 8
     ntfs_log_debug("mft_bitmap_size = %i, g_mft_bitmap_byte_size = %i\n", mft_bitmap_size, g_mft_bitmap_byte_size);
     g_mft_bitmap = ntfs_calloc(g_mft_bitmap_byte_size);
     if (!g_mft_bitmap) {
@@ -3971,7 +4011,7 @@ static BOOL mkntfs_initialize_bitmaps(void)
 
     /* Mft bitmap is right after $Boot's data. */
     // Mft bitmap 位于$Boot的数据之后。
-    i = (8192 + g_vol->cluster_size - 1) / g_vol->cluster_size;
+    i = (8192 + g_vol->cluster_size - 1) / g_vol->cluster_size;     // (8192 + 一个簇/块大小 - 1) / 一个簇/块大小 = 2
     g_rl_mft_bmp[0].lcn = i;
 
     /*
@@ -3988,7 +4028,13 @@ static BOOL mkntfs_initialize_bitmaps(void)
 }
 
 /**
- * mkntfs_initialize_rl_mft -
+ * @brief mkntfs_initialize_rl_mft -
+ *  MFT 是 NTFS 文件系统的核心数据结构，用于存储文件和目录的元数据信息
+ *  MFT 本身也是一个文件，它的数据可能会被分散存储在磁盘的多个不连续位置（称为 簇）
+ *  为了描述 MFT 文件在磁盘上的实际分布情况，NTFS使用了一种称为“运行列表”(Runlist)的数据结构
+ *  mkntfs_initialize_rl_mft 函数的作用就是初始化这个 MFT 文件的运行列表。它会分配一个初始的连续磁盘空间，并将其记录到运行列表中
+ *  这个步骤确保了MFT文件在刚创建时候有一个良好的磁盘分布，有助于提高 MFT 的访问性能
+ *  随着文件系统的使用，MFT文件可能会被碎片化，需要进一步优化...
  */
 static BOOL mkntfs_initialize_rl_mft(void)
 {
@@ -3997,7 +4043,7 @@ static BOOL mkntfs_initialize_rl_mft(void)
 
     /* If user didn't specify the mft lcn, determine it now. */
     if (!g_mft_lcn) {
-        /*
+        /**
          * We start at the higher value out of 16kiB and just after the
          * mft bitmap.
          */
@@ -4035,6 +4081,7 @@ static BOOL mkntfs_initialize_rl_mft(void)
      * of the device.
      */
     g_mft_zone_end += g_mft_lcn;
+
     /* Create runlist for mft. */
     g_rl_mft = ntfs_malloc(2 * sizeof(runlist));
     if (!g_rl_mft) {
@@ -4043,6 +4090,7 @@ static BOOL mkntfs_initialize_rl_mft(void)
 
     g_rl_mft[0].vcn = 0LL;
     g_rl_mft[0].lcn = g_mft_lcn;
+
     /* rounded up division by cluster size */
     j = (g_mft_size + g_vol->cluster_size - 1) / g_vol->cluster_size;
     g_rl_mft[1].vcn = j;
@@ -4108,14 +4156,14 @@ static BOOL mkntfs_initialize_rl_logfile(void)
      * Determine logfile_size from volume_size (rounded up to a cluster),
      * making sure it does not overflow the end of the volume.
      */
-    if (volume_size < 2048LL * 1024) {       /* < 2MiB    */
-        g_logfile_size = 256LL * 1024;        /*   -> 256kiB    */
+    if (volume_size < 2048LL * 1024) {                  /* < 2MiB    */
+        g_logfile_size = 256LL * 1024;                  /*   -> 256kiB    */
     }
-    else if (volume_size < 4000000LL) {       /* < 4MB    */
-        g_logfile_size = 512LL * 1024;        /*   -> 512kiB    */
+    else if (volume_size < 4000000LL) {                 /* < 4MB    */
+        g_logfile_size = 512LL * 1024;                  /*   -> 512kiB    */
     }
-    else if (volume_size <= 200LL * 1024 * 1024) {   /* < 200MiB    */
-        g_logfile_size = 2048LL * 1024;        /*   -> 2MiB    */
+    else if (volume_size <= 200LL * 1024 * 1024) {      /* < 200MiB    */
+        g_logfile_size = 2048LL * 1024;                 /*   -> 2MiB    */
     }
     else {
         /*
@@ -4129,8 +4177,8 @@ static BOOL mkntfs_initialize_rl_logfile(void)
          *      6144828        32784       187.433
          *      4192932        23024       182.111
          */
-        if (volume_size >= 12LL << 30) {       /* > 12GiB    */
-            g_logfile_size = 64 << 20;    /*   -> 64MiB    */
+        if (volume_size >= 12LL << 30) {                /* > 12GiB    */
+            g_logfile_size = 64 << 20;                  /*   -> 64MiB    */
         }
         else {
             g_logfile_size = (volume_size / 200) & ~(g_vol->cluster_size - 1);
@@ -4185,7 +4233,7 @@ static BOOL mkntfs_initialize_rl_boot(void)
      */
     j = (8192 + g_vol->cluster_size - 1) / g_vol->cluster_size;
     g_rl_boot[1].vcn = j;
-    g_rl_boot[0].length = j;
+    g_rl_boot[0].length = j;        // 2
     g_rl_boot[1].lcn = -1LL;
     g_rl_boot[1].length = 0LL;
 
@@ -4231,7 +4279,7 @@ static BOOL mkntfs_fill_device_with_zeroes(void)
     int i;
     ssize_t bw;
     unsigned long long position;
-    float progress_inc = (float)g_vol->nr_clusters / 100;
+    float progress_inc = (float)g_vol->nr_clusters / 100;       // 进度条 步长
     u64 volume_size;
 
     volume_size = g_vol->nr_clusters << g_vol->cluster_size_bits;
@@ -4265,6 +4313,7 @@ static BOOL mkntfs_fill_device_with_zeroes(void)
         }
     }
     ntfs_log_progress("\b\b\b\b100%%");
+
     position = (volume_size & (g_vol->cluster_size - 1)) / opts.sector_size;
     for (i = 0; (unsigned long)i < position; i++) {
         bw = mkntfs_write(g_vol->dev, g_buf, opts.sector_size);
@@ -4462,7 +4511,7 @@ static BOOL mkntfs_create_root_structures(void)
     GUID vol_guid;
 
     ntfs_log_quiet("Creating NTFS volume structures.\n");
-    nr_sysfiles = 27;
+    nr_sysfiles = 27;       // 系统 MFT
     /**
      * Setup an empty mft record.  Note, we can just give 0 as the mft
      * reference as we are creating an NTFS 1.2 volume for which the mft
@@ -4471,12 +4520,19 @@ static BOOL mkntfs_create_root_structures(void)
      * Copy the mft record onto all 16 records in the buffer and setup the
      * sequence numbers of each system file to equal the mft record number
      * of that file (only for $MFT is the sequence number 1 rather than 0).
+     *
+     * 设置一个空的mft记录。注意，我们可以只给0作为mft引用，因为我们正在创建一个NTFS 1.2卷，ntfs_mft_record_layout()会忽略mft引用。
+     * 将mft记录复制到缓冲区中的所有16条记录上，并设置每个系统文件的序列号，使其等于该文件的mft记录号(只有$mft是序列号1而不是0)。
      */
     for (i = 0; i < nr_sysfiles; i++) {
+        // 初始化 g_vol->mft_record_size，
+        // MFT 结构体 初始化
         if (ntfs_mft_record_layout(g_vol, 0, m = (MFT_RECORD *)(g_buf + i * g_vol->mft_record_size))) {
             ntfs_log_error("Failed to layout system mft records.\n");
             return FALSE;
         }
+
+        // 0 ~ 24 ? 为什么
         if (i == 0 || i > 23) {
             m->sequence_number = const_cpu_to_le16(1);
         }
@@ -4484,6 +4540,7 @@ static BOOL mkntfs_create_root_structures(void)
             m->sequence_number = cpu_to_le16(i);
         }
     }
+
     /**
      * If only one cluster contains all system files then
      * fill the rest of it with empty, formatted records.
@@ -5050,10 +5107,15 @@ static int mkntfs_redirect(struct mkntfs_options *opts2)
         ntfs_log_error("Internal error: invalid parameters to mkntfs_options.\n");
         goto done;
     }
-    /* Initialize the random number generator with the current time. */
+
+    /**
+     * sle64_to_cpu 用于将64位小端序数据转为 CPU 原生字节序的函数
+     */
     srandom(sle64_to_cpu(mkntfs_time())/10000000);
 
-    /* Allocate and initialize ntfs_volume structure g_vol. */
+    /**
+     * struct ntfs_volume ==> g_vol
+     */
     g_vol = ntfs_volume_alloc(); // 单纯的分配内存
     if (!g_vol) {
         ntfs_log_perror("Could not create volume");
@@ -5073,17 +5135,24 @@ static int mkntfs_redirect(struct mkntfs_options *opts2)
         }
     }
 
-    if (opts.cluster_size >= 0)
+    if (opts.cluster_size >= 0) {
         g_vol->cluster_size = opts.cluster_size;
+    }
 
     /* Length is in unicode characters. */
-    // ?
+    /**
+     * 支持的 unicode 字符
+     * $UpCase
+     *
+     * NTFS区分大小写，使用 g_vol->upcase 提供高效的大小写转换操作
+     */
     g_vol->upcase_len = ntfs_upcase_build_default(&g_vol->upcase);
 
     /* Since Windows 8, there is a $Info stream in $UpCase */
     g_upcaseinfo = (struct UPCASEINFO*)ntfs_malloc(sizeof(struct UPCASEINFO));
-    if (!g_vol->upcase_len || !g_upcaseinfo)
+    if (!g_vol->upcase_len || !g_upcaseinfo) {
         goto done;
+    }
 
     /* If the CRC is correct, chkdsk does not warn about obsolete table */
     crc64(0, (byte*) NULL, 0); /* initialize the crc computation */
@@ -5093,6 +5162,8 @@ static int mkntfs_redirect(struct mkntfs_options *opts2)
     memset(g_upcaseinfo, 0, sizeof(struct UPCASEINFO));
     g_upcaseinfo->len = const_cpu_to_le32(sizeof(struct UPCASEINFO));
     g_upcaseinfo->crc = cpu_to_le64(upcase_crc);
+
+    /* attrdef_ntfs3x_array */
     g_vol->attrdef = ntfs_malloc(sizeof(attrdef_ntfs3x_array)); // 2560 长的数组
     if (!g_vol->attrdef) {
         ntfs_log_perror("Could not create attrdef structure");
@@ -5101,72 +5172,98 @@ static int mkntfs_redirect(struct mkntfs_options *opts2)
     memcpy(g_vol->attrdef, attrdef_ntfs3x_array, sizeof(attrdef_ntfs3x_array));
     g_vol->attrdef_len = sizeof(attrdef_ntfs3x_array);
 
-    /**
-     * 1. 打开设备、获取设备信息stat、确认设备未挂载，
-     * 2. 设置设备操作函数（读写）
-     */
     if (!mkntfs_open_partition(g_vol)) {
         goto done;
     }
 
-    /**
-     * Decide on the sector size, cluster size, mft record and index record
-     * sizes as well as the number of sectors/tracks/heads/size, etc.
-     *  - 扇区大小
-     *  - 扇区数量
-     *  - 最后一个扇区作为引导备份扇区(512 byte)
-     *  - 磁头数量
-     *  - 块大小
-     *  - 块数量
-     *  - 容量检测
-     *  - mft大小设置
-     *  - index大小设置
-     * 这个函数主要根据输入参数设置NTFS属性大小、检查属性是否处于合理范围
-     */
     if (!mkntfs_override_vol_params(g_vol)) {
         goto done;
     }
 
-    /* Initialize $Bitmap and $MFT/$BITMAP related stuff. */
+#if 0
+    printf("g_vol:\n");
+    printf("  ntfs_device:\n");
+    printf("    d_state            : %lu\n", g_vol->dev->d_state);
+    printf("    d_name             : %s\n", g_vol->dev->d_name);
+    printf("    d_heads            : %d\n", g_vol->dev->d_heads);
+    printf("    d_sectors_per_track: %d\n", g_vol->dev->d_sectors_per_track);
+    printf("  vol_name : %s\n", g_vol->vol_name);
+    printf("  state    : %lu\n", g_vol->state);
+    printf("  ntfs_inode\n");
+    printf("    mft_no             : %lu\n", g_vol->vol_ni->mft_no);
+    printf("    MFT_RECORD\n");
+    printf("    ntfs_volume\n");
+    printf("    state              : %lu\n", g_vol->vol_ni->state);
+    printf("    attr_list_size     : %lu\n", g_vol->vol_ni->attr_list_size);
+    printf("    data_size          : %d\n", g_vol->vol_ni->data_size);
+    printf("    allocated_size     : %d\n", g_vol->vol_ni->allocated_size);
+
+#endif
+
+    // MFT 所在 簇/块 bitmap 存储分配
     if (!mkntfs_initialize_bitmaps()) {
         goto done;
     }
 
-    /* Initialize MFT & set g_logfile_lcn. */
+    // MFT runlist、MFT 备份的 runlist、logfile 分配
     if (!mkntfs_initialize_rl_mft()) {
         goto done;
     }
 
-    /* Initialize $LogFile. */
+    /**
+     * 负责初始化 NTFS 日志文件的运行列表(Runlist)
+     *
+     * 和 MFT 文件一样，NTFS 日志文件的数据也可能被分散存储在磁盘的多个不连续位置(簇)上。
+     * 此函数作用是初始化这个日志文件的运行列表，它会分配一个初始的连续磁盘空间，并将其记录到日志文件的运行列表中。
+     * 这个步骤确保了日志文件在刚创建时有一个良好的磁盘分布，有助于提高日志文件的访问性能
+     * 日志文件在文件系统的正常运行过程中扮演着非常重要的角色。它记录了文件创建、删除、修改等关键元数据操作的历史，在文件系统崩溃恢复时候起到关键作用
+     */
     if (!mkntfs_initialize_rl_logfile()) {
         goto done;
     }
 
-    /* Initialize $Boot. */
+    /**
+     * 负责初始化启动扇区(Boot Sector)的运行列表(Runlist)
+     *
+     * NTFS 中，启动扇区包含了关键的引导信息和文件系统元数据，是系统启动和文件系统识别的重要依据
+     * 和 MFT 文件以及日志文件一样，启动扇区的数据也可能被分散存储在磁盘的多个不连续位置(簇)上
+     * 初始化这个启动扇区的运行列表。它会分配一个初始的连续磁盘空间，并将其记录到启动扇区的运行列表中
+     * 这个步骤确保了启动扇区在刚创建时候有一个良好的磁盘分布，有助于提高系统启动和文件系统挂载的性能和可靠性
+     * 启动扇区包含了诸如文件系统版本、簇大小、MFT位置等关键信息。如果启动扇区的数据布局不合理，可能会导致文件系统无法正常挂载和启动
+     */
     if (!mkntfs_initialize_rl_boot()) {
         goto done;
     }
 
     /* Allocate a buffer large enough to hold the mft. */
-    printf("MFT size: %d\n", g_mft_size);
+    // 写入的基本单位，默认 27K
     g_buf = ntfs_calloc(g_mft_size);
     if (!g_buf) {
         goto done;
     }
 
-    /* Create runlist for $BadClus, $DATA named stream $Bad. */
+    /**
+     * 负责初始化“坏簇”区域的运行列表
+     *
+     * NTFS文件系统创建过程中会扫描磁盘，识别处那些有缺陷或损坏的磁盘簇(簇是NTFS的基本存储单元)
+     * 这些被标记为“坏簇”的磁盘区域是不能用于存储数据的，必须从文件系统中隔离出来，以防止误用
+     * 此函数将磁盘坏簇区域记录在一个专门的运行列表中
+     */
     if (!mkntfs_initialize_rl_bad()) {
         goto done;
     }
 
-    /* If not quick format, fill the device with 0s. */
+    // 非快速格式化
+    // 以 g_buf 为单位，写入
     if (!opts.quick_format) {
         if (!mkntfs_fill_device_with_zeroes()) {
             goto done;
         }
     }
 
-    /* Create NTFS volume structures. */
+    /**
+     * 负责创建文件系统根目录结构
+     */
     if (!mkntfs_create_root_structures()) {
         goto done;
     }
@@ -5299,15 +5396,17 @@ int main(int argc, char *argv[])
     int result = 1;
 
     ntfs_log_set_handler(ntfs_log_handler_outerr);
+
     utils_set_locale();
 
-    mkntfs_init_options(&opts);            /* Set up the options */
+    /* Set up the options */
+    mkntfs_init_options(&opts);
 
-            /* Read the command line options */
+    /* Read the command line options */
     result = mkntfs_parse_options(argc, argv, &opts);
-
-    if (result < 0)
+    if (result < 0) {
         result = mkntfs_redirect(&opts);
+    }
 
     return result;
 }

@@ -544,22 +544,19 @@ s64 ntfs_device_size_get(struct ntfs_device *dev, int block_size)
     }
 #endif
 #ifdef BLKGETSIZE
-    {    unsigned long size;
-
+    {
+        unsigned long size;
         if (dev->d_ops->ioctl(dev, BLKGETSIZE, &size) >= 0) {
-            ntfs_log_debug("BLKGETSIZE nr 512 byte blocks = %lu (0x%lx)\n",
-                    size, size);
+            ntfs_log_debug("BLKGETSIZE nr 512 byte blocks = %lu (0x%lx)\n", size, size);
             return (s64)size * 512 / block_size;
         }
     }
 #endif
 #ifdef FDGETPRM
-    {       struct floppy_struct this_floppy;
-
+    {
+        struct floppy_struct this_floppy;
         if (dev->d_ops->ioctl(dev, FDGETPRM, &this_floppy) >= 0) {
-            ntfs_log_debug("FDGETPRM nr 512 byte blocks = %lu (0x%lx)\n",
-                    (unsigned long)this_floppy.size,
-                    (unsigned long)this_floppy.size);
+            ntfs_log_debug("FDGETPRM nr 512 byte blocks = %lu (0x%lx)\n", (unsigned long)this_floppy.size, (unsigned long)this_floppy.size);
             return (s64)this_floppy.size * 512 / block_size;
         }
     }
@@ -780,6 +777,7 @@ skip_hd:
     }
 #endif
     errno = err;
+
     return -1;
 }
 
@@ -833,8 +831,9 @@ int ntfs_device_sectors_per_track_get(struct ntfs_device *dev)
         return -1;
     }
     if (dev->d_sectors_per_track == -1) {
-        if (ntfs_device_get_geo(dev) == -1)
+        if (ntfs_device_get_geo(dev) == -1) {
             return -1;
+        }
         if (dev->d_sectors_per_track == -1) {
             errno = EINVAL;
             return -1;
@@ -899,8 +898,8 @@ int ntfs_device_sector_size_get(struct ntfs_device *dev)
 }
 
 /**
- * ntfs_device_block_size_set - set block size of a device
- * @dev:    open device
+ * @brief ntfs_device_block_size_set - set block size of a device
+ * @dev:        open device
  * @block_size: block size to set @dev to
  *
  * On success, return 0.
@@ -911,8 +910,7 @@ int ntfs_device_sector_size_get(struct ntfs_device *dev)
  *    EOPNOTSUPP    System does not support BLKBSZSET ioctl
  *    ENOTTY        @dev is a file or a device not supporting BLKBSZSET
  */
-int ntfs_device_block_size_set(struct ntfs_device *dev,
-        int block_size __attribute__((unused)))
+int ntfs_device_block_size_set(struct ntfs_device *dev, int block_size __attribute__((unused)))
 {
     if (!dev) {
         errno = EINVAL;
@@ -922,13 +920,13 @@ int ntfs_device_block_size_set(struct ntfs_device *dev,
     {
         size_t s_block_size = block_size;
         if (!dev->d_ops->ioctl(dev, BLKBSZSET, &s_block_size)) {
-            ntfs_log_debug("Used BLKBSZSET to set block size to "
-                    "%d bytes.\n", block_size);
+            ntfs_log_debug("Used BLKBSZSET to set block size to %d bytes.\n", block_size);
             return 0;
         }
         /* If not a block device, pretend it was successful. */
-        if (!NDevBlock(dev))
+        if (!NDevBlock(dev)) {
             return 0;
+        }
     }
 #else
     /* If not a block device, pretend it was successful. */

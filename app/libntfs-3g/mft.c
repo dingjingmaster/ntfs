@@ -231,8 +231,7 @@ int ntfs_mft_records_write(const ntfs_volume *vol, const MFT_REF mref,
  *		-1 with errno = EIO otherwise
  */
 
-int ntfs_mft_record_check(const ntfs_volume *vol, const MFT_REF mref, 
-			  MFT_RECORD *m)
+int ntfs_mft_record_check(const ntfs_volume *vol, const MFT_REF mref, MFT_RECORD *m)
 {			  
 	ATTR_RECORD *a;
 	ATTR_TYPES previous_type;
@@ -345,8 +344,7 @@ err_out:
  * Note: We do not check if the mft record is flagged in use. The caller can
  *	 check if desired.
  */
-int ntfs_file_record_read(const ntfs_volume *vol, const MFT_REF mref,
-		MFT_RECORD **mrec, ATTR_RECORD **attr)
+int ntfs_file_record_read(const ntfs_volume *vol, const MFT_REF mref, MFT_RECORD **mrec, ATTR_RECORD **attr)
 {
 	MFT_RECORD *m;
 

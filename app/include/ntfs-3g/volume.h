@@ -181,6 +181,9 @@ typedef enum
 
 /**
  * struct _ntfs_volume - structure describing an open volume in memory.
+ * 簇：4096
+ * 磁道：
+ * 扇区：512 byte
  */
 struct _ntfs_volume
 {
@@ -199,12 +202,12 @@ struct _ntfs_volume
 
     u16 sector_size;                            /* Byte size of a sector. */
     u8 sector_size_bits;                        /* Log(2) of the byte size of a sector. */
-    u32 cluster_size;                           /* 默认大小：4096. Byte size of a cluster. */
-    u32 mft_record_size;                        /* 默认大小：1024. Byte size of a mft record. */
-    u32 indx_record_size;                       /* Byte size of a INDX record. */
+    u32 cluster_size;                           /* 默认大小：4096。 Byte size of a cluster. */
+    u32 mft_record_size;                        /* 默认大小：1024。MFT用来管理文件和目录的元数据信息，MFT中每一条记录对应一个文件或目录。mft_record_size 是 NTFS 中每一条MFT记录的大小，较小的MFT减少磁盘空间浪费，增加MFT查找和访问开销；较大的MFT提高MFT的访问性能，但会浪费更多的磁盘空间。 Byte size of a mft record. */
+    u32 indx_record_size;                       /* 默认大小：4096。Byte size of a INDX record. */
     u8 cluster_size_bits;                       /* Log(2) of the byte size of a cluster. */
-    u8 mft_record_size_bits;                    /* Log(2) of the byte size of a mft record. */
-    u8 indx_record_size_bits;                   /* Log(2) of the byte size of a INDX record. */
+    u8 mft_record_size_bits;                    /* 默认值：10。Log(2) of the byte size of a mft record. */
+    u8 indx_record_size_bits;                   /* 默认值：12。Log(2) of the byte size of a INDX record. */
 
     /* Variables used by the cluster and mft allocators. */
     u8 mft_zone_multiplier;                     /* Initial mft zone multiplier. */
@@ -216,7 +219,7 @@ struct _ntfs_volume
     LCN data1_zone_pos;                         /* Current position in the first data zone. */
     LCN data2_zone_pos;                         /* Current position in the second data zone. */
 
-    s64 nr_clusters;                            /* Volume size in clusters, hence also the number of bits in lcn_bitmap. */
+    s64 nr_clusters;                            /* 簇数量：总容量 / 簇大小(4096)，也是lcn_bitmap的位数。Volume size in clusters, hence also the number of bits in lcn_bitmap. */
     ntfs_inode *lcnbmp_ni;                      /* ntfs_inode structure for FILE_Bitmap. */
     ntfs_attr *lcnbmp_na;                       /* ntfs_attr structure for the data attribute of FILE_Bitmap. Each bit represents a cluster on the volume, bit 0 representing lcn 0 and so on. A set bit means that the cluster and vice versa. */
 
@@ -238,8 +241,8 @@ struct _ntfs_volume
     ntfs_inode *mftmirr_ni;                     /* ntfs_inode structure for FILE_MFTMirr. */
     ntfs_attr *mftmirr_na;                      /* ntfs_attr structure for the data attribute of FILE_MFTMirr. */
 
-    ntfschar *upcase;                           /* Upper case equivalents of all 65536 2-byte Unicode characters. Obtained from FILE_UpCase. */
-    u32 upcase_len;                             /* Length in Unicode characters of the upcase table. */
+    ntfschar *upcase;                           /* 所有65536个2字节Unicode字符的大写。从FILE_UpCase中获取。NTFS区分大小写，使用 g_vol->upcase 提供高效的大小写转换操作。Upper case equivalents of all 65536 2-byte Unicode characters. Obtained from FILE_UpCase. */
+    u32 upcase_len;                             /* upcase 长度。Length in Unicode characters of the upcase table. */
     ntfschar *locase;                           /* Lower case equivalents of all 65536 2-byte Unicode characters. Only if option case_ignore is set. */
 
     ATTR_DEF *attrdef;                          /* Attribute definitions. Obtained from FILE_AttrDef. */
