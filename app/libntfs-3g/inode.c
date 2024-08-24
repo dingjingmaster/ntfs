@@ -474,14 +474,13 @@ ntfs_inode *ntfs_inode_open(ntfs_volume *vol, const MFT_REF mref)
 	debug_double_inode(item.inum,1);
 	item.pathname = (const char*)NULL;
 	item.varsize = 0;
-	cached = (struct CACHED_NIDATA*)ntfs_fetch_cache(vol->nidata_cache,
-				GENERIC(&item),idata_cache_compare);
+	cached = (struct CACHED_NIDATA*)ntfs_fetch_cache(vol->nidata_cache, GENERIC(&item),idata_cache_compare);
 	if (cached) {
 		ni = cached->ni;
 		/* do not keep open entries in cache */
-		ntfs_remove_cache(vol->nidata_cache,
-				(struct CACHED_GENERIC*)cached,0);
-	} else {
+		ntfs_remove_cache(vol->nidata_cache, (struct CACHED_GENERIC*)cached,0);
+	}
+    else {
 		ni = ntfs_inode_real_open(vol, mref);
 	}
 	if (!ni) {
