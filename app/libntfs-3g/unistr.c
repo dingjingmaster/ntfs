@@ -213,7 +213,8 @@ int ntfs_names_full_collate(const ntfschar *name1, const u32 name1_len,
                 return -1;
             if (c1 > c2)
                 return 1;
-        } else {
+        }
+        else {
             do {
                 u1 = le16_to_cpu(*name1);
                 name1++;
@@ -233,11 +234,15 @@ int ntfs_names_full_collate(const ntfschar *name1, const u32 name1_len,
             if (name1_len > name2_len)
                 return 1;
         }
-    } else {
-        if (name1_len < name2_len)
+    }
+    else {
+        if (name1_len < name2_len) {
             return -1;
-        if (name1_len > name2_len)
+        }
+
+        if (name1_len > name2_len) {
             return 1;
+        }
     }
     return 0;
 }

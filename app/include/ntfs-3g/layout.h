@@ -284,7 +284,7 @@ typedef enum
  * The _LE versions are to be applied on little endian MFT_REFs.
  * Note: The _LE versions will return a CPU endian formatted value!
  */
-#define MFT_REF_MASK_CPU 0x0000ffffffffffffULL
+#define MFT_REF_MASK_CPU 0x0000ffffffffffffULL    // 12 x 4 = 48 位
 #define MFT_REF_MASK_LE const_cpu_to_le64 (MFT_REF_MASK_CPU)
 
 typedef u64 MFT_REF;
@@ -522,7 +522,7 @@ typedef struct
 {
     /*hex ofs*/
     /*  0*/ ntfschar name[0x40];                /* Unicode name of the attribute. Zero terminated. */
-    /* 80*/ ATTR_TYPES type; i                  /* Type of the attribute. */
+    /* 80*/ ATTR_TYPES type;                    /* Type of the attribute. */
     /* 84*/ le32 display_rule;                  /* Default display rule. FIXME: What does it mean? (AIA) */
     /* 88*/ COLLATION_RULES collation_rule;     /* Default collation rule. */
     /* 8c*/ ATTR_DEF_FLAGS flags;               /* Flags describing the attribute. */
@@ -614,7 +614,9 @@ typedef enum
  */
 typedef enum
 {
-    RESIDENT_ATTR_IS_INDEXED = 0x01,                                    /* Attribute is referenced in an index (has implications for deleting and modifying the attribute). */
+    RESIDENT_ATTR_IS_INDEXED = 0x01, /* Attribute is referenced in an index
+                        (has implications for deleting and
+                        modifying the attribute). */
 } __attribute__ ((__packed__)) RESIDENT_ATTR_FLAGS;
 
 /**
@@ -975,31 +977,28 @@ typedef struct
  */
 typedef enum
 {
-    FILE_NAME_POSIX = 0x00,
-    /* This is the largest namespace. It is case sensitive and
-       allows all Unicode characters except for: '\0' and '/'.
-       Beware that in WinNT/2k files which eg have the same name
-       except for their case will not be distinguished by the
-       standard utilities and thus a "del filename" will delete
-       both "filename" and "fileName" without warning. */
-    FILE_NAME_WIN32 = 0x01,
-    /* The standard WinNT/2k NTFS long filenames. Case insensitive.
-       All Unicode chars except: '\0', '"', '*', '/', ':', '<',
-       '>', '?', '\' and '|'.  Trailing dots and spaces are allowed,
-       even though on Windows a filename with such a suffix can only
-       be created and accessed using a WinNT-style path, i.e.
-       \\?\-prefixed.  (If a regular path is used, Windows will
-       strip the trailing dots and spaces, which makes such
-       filenames incompatible with most Windows software.) */
-    FILE_NAME_DOS = 0x02,
-    /* The standard DOS filenames (8.3 format). Uppercase only.
-       All 8-bit characters greater space, except: '"', '*', '+',
-       ',', '/', ':', ';', '<', '=', '>', '?' and '\'.  Trailing
-       dots and spaces are forbidden. */
-    FILE_NAME_WIN32_AND_DOS = 0x03,
-    /* 3 means that both the Win32 and the DOS filenames are
-       identical and hence have been saved in this single filename
-       record. */
+    FILE_NAME_POSIX         = 0x00,     /* This is the largest namespace. It is case sensitive and
+                                         * allows all Unicode characters except for: '\0' and '/'.
+                                         * Beware that in WinNT/2k files which eg have the same name
+                                         * except for their case will not be distinguished by the
+                                         * standard utilities and thus a "del filename" will delete
+                                         * both "filename" and "fileName" without warning. */
+
+    FILE_NAME_WIN32         = 0x01,     /* The standard WinNT/2k NTFS long filenames. Case insensitive.
+                                         * All Unicode chars except: '\0', '"', '*', '/', ':', '<',
+                                         * '>', '?', '\' and '|'.  Trailing dots and spaces are allowed,
+                                         * even though on Windows a filename with such a suffix can only
+                                         * be created and accessed using a WinNT-style path, i.e.
+                                         * \\?\-prefixed.  (If a regular path is used, Windows will
+                                         * strip the trailing dots and spaces, which makes such
+                                         * filenames incompatible with most Windows software.) */
+
+    FILE_NAME_DOS           = 0x02,     /* The standard DOS filenames (8.3 format). Uppercase only.
+                                         * All 8-bit characters greater space, except: '"', '*', '+',
+                                         * ',', '/', ':', ';', '<', '=', '>', '?' and '\'.  Trailing
+                                         * dots and spaces are forbidden. */
+
+    FILE_NAME_WIN32_AND_DOS = 0x03,     /* 3 means that both the Win32 and the DOS filenames are identical and hence have been saved in this single filename record. */
 } __attribute__ ((__packed__)) FILE_NAME_TYPE_FLAGS;
 
 /**
@@ -1018,45 +1017,40 @@ typedef enum
 typedef struct
 {
     /*hex ofs*/
-    /*  0*/ leMFT_REF parent_directory; /* Directory this filename is
-                     referenced from. */
-    /*  8*/ sle64 creation_time; /* Time file was created. */
-    /* 10*/ sle64 last_data_change_time; /* Time the data attribute was last
-                     modified. */
-    /* 18*/ sle64 last_mft_change_time; /* Time this mft record was last
-                     modified. */
-    /* 20*/ sle64 last_access_time; /* Last time this mft record was
-                 accessed. */
-    /* 28*/ sle64 allocated_size; /* Byte size of on-disk allocated space
-                 for the data attribute.  So for
-                 normal $DATA, this is the
-                 allocated_size from the unnamed
-                 $DATA attribute and for compressed
-                 and/or sparse $DATA, this is the
-                 compressed_size from the unnamed
-                 $DATA attribute.  NOTE: This is a
-                 multiple of the cluster size. */
-    /* 30*/ sle64 data_size; /* Byte size of actual data in data
-             attribute. */
-    /* 38*/ FILE_ATTR_FLAGS file_attributes; /* Flags describing the file. */
+    /*  0*/ leMFT_REF         parent_directory;       /* Directory this filename is referenced from. */
+    /*  8*/ sle64             creation_time;          /* Time file was created. */
+    /* 10*/ sle64             last_data_change_time;  /* Time the data attribute was last modified. */
+    /* 18*/ sle64             last_mft_change_time;   /* Time this mft record was last modified. */
+    /* 20*/ sle64             last_access_time;       /* Last time this mft record was accessed. */
+    /* 28*/ sle64             allocated_size;         /* Byte size of on-disk allocated space
+                                                       * for the data attribute.  So for
+                                                       * normal $DATA, this is the
+                                                       * allocated_size from the unnamed
+                                                       * $DATA attribute and for compressed
+                                                       * and/or sparse $DATA, this is the
+                                                       * compressed_size from the unnamed
+                                                       * $DATA attribute.  NOTE: This is a
+                                                       * multiple of the cluster size. */
+    /* 30*/ sle64             data_size;              /* Byte size of actual data in data attribute. */
+    /* 38*/ FILE_ATTR_FLAGS   file_attributes;        /* Flags describing the file. */
     /* 3c*/ union
     {
         /* 3c*/ struct
         {
-            /* 3c*/ le16 packed_ea_size; /* Size of the buffer needed to
-                         pack the extended attributes
-                         (EAs), if such are present.*/
-            /* 3e*/ le16 reserved; /* Reserved for alignment. */
+            /* 3c*/ le16 packed_ea_size;              /* Size of the buffer needed to
+                                                       * pack the extended attributes
+                                                       * (EAs), if such are present.*/
+
+            /* 3e*/ le16 reserved;                    /* Reserved for alignment. */
         } __attribute__ ((__packed__));
-        /* 3c*/ le32 reparse_point_tag; /* Type of reparse point,
-                     present only in reparse
-                     points and only if there are
-                     no EAs. */
+        /* 3c*/ le32 reparse_point_tag;               /* Type of reparse point,
+                                                       * present only in reparse
+                                                       * points and only if there are
+                                                       * no EAs. */
     } __attribute__ ((__packed__));
-    /* 40*/ u8 file_name_length; /* Length of file name in
-                 (Unicode) characters. */
-    /* 41*/ FILE_NAME_TYPE_FLAGS file_name_type; /* Namespace of the file name.*/
-    /* 42*/ ntfschar file_name[0]; /* File name in Unicode. */
+    /* 40*/ u8 file_name_length;                      /* Length of file name in (Unicode) characters. */
+    /* 41*/ FILE_NAME_TYPE_FLAGS file_name_type;      /* Namespace of the file name.*/
+    /* 42*/ ntfschar file_name[0];                    /* File name in Unicode. */
 } __attribute__ ((__packed__)) FILE_NAME_ATTR;
 
 /**

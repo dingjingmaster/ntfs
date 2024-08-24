@@ -237,8 +237,8 @@ s64 ntfs_pread(struct ntfs_device *dev, const s64 pos, s64 count, void *b)
  * ntfs_pwrite - positioned write to disk
  * @dev:    device to write to
  * @pos:    position in file descriptor to write to
- * @count:    number of bytes to write
- * @b:        data buffer to write to disk
+ * @count:  number of bytes to write
+ * @b:      data buffer to write to disk
  *
  * This function will write @count bytes from data buffer @b to the device @dev
  * at position @pos.
@@ -252,8 +252,7 @@ s64 ntfs_pread(struct ntfs_device *dev, const s64 pos, s64 count, void *b)
  * appropriately to the return code of either seek, write, or set
  * to EINVAL in case of invalid arguments.
  */
-s64 ntfs_pwrite(struct ntfs_device *dev, const s64 pos, s64 count,
-        const void *b)
+s64 ntfs_pwrite(struct ntfs_device *dev, const s64 pos, s64 count, const void *b)
 {
     s64 written, total, ret = -1;
     struct ntfs_device_operations *dops;
@@ -275,11 +274,11 @@ s64 ntfs_pwrite(struct ntfs_device *dev, const s64 pos, s64 count,
 
     NDevSetDirty(dev);
     for (total = 0; count; count -= written, total += written) {
-        written = dops->pwrite(dev, (const char*)b + total, count,
-                       pos + total);
+        written = dops->pwrite(dev, (const char*)b + total, count, pos + total);
         /* If everything ok, continue. */
-        if (written > 0)
+        if (written > 0) {
             continue;
+        }
         /*
          * If nothing written or error return number of bytes written.
          */
@@ -383,8 +382,7 @@ s64 ntfs_mst_pread(struct ntfs_device *dev, const s64 pos, s64 count,
  * simulating an mst read on the written data. This way cache coherency is
  * achieved.
  */
-s64 ntfs_mst_pwrite(struct ntfs_device *dev, const s64 pos, s64 count,
-        const u32 bksize, void *b)
+s64 ntfs_mst_pwrite(struct ntfs_device *dev, const s64 pos, s64 count, const u32 bksize, void *b)
 {
     s64 written, i;
 
@@ -392,29 +390,36 @@ s64 ntfs_mst_pwrite(struct ntfs_device *dev, const s64 pos, s64 count,
         errno = EINVAL;
         return -1;
     }
-    if (!count)
+
+    if (!count) {
         return 0;
+    }
+
     /* Prepare data for writing. */
     for (i = 0; i < count; ++i) {
         int err;
-
-        err = ntfs_mst_pre_write_fixup((NTFS_RECORD*)
-                ((u8*)b + i * bksize), bksize);
+        err = ntfs_mst_pre_write_fixup((NTFS_RECORD*) ((u8*)b + i * bksize), bksize);
         if (err < 0) {
             /* Abort write at this position. */
-            if (!i)
+            if (!i) {
                 return err;
+            }
             count = i;
             break;
         }
     }
     /* Write the prepared data. */
     written = ntfs_pwrite(dev, pos, count * bksize, b);
+
     /* Quickly deprotect the data again. */
-    for (i = 0; i < count; ++i)
+    for (i = 0; i < count; ++i) {
         ntfs_mst_post_write_fixup((NTFS_RECORD*)((u8*)b + i * bksize));
-    if (written <= 0)
+    }
+
+    if (written <= 0) {
         return written;
+    }
+
     /* Finally, return the number of complete blocks written. */
     return written / bksize;
 }
