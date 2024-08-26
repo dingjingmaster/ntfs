@@ -90,11 +90,11 @@ void ntfs_inode_mark_dirty(ntfs_inode *ni)
  */
 static ntfs_inode *__ntfs_inode_allocate(ntfs_volume *vol)
 {
-	ntfs_inode *ni;
-
-	ni = (ntfs_inode*)ntfs_calloc(sizeof(ntfs_inode));
-	if (ni)
+	ntfs_inode *ni = (ntfs_inode*)ntfs_calloc(sizeof(ntfs_inode));
+	if (ni) {
 		ni->vol = vol;
+	}
+
 	return ni;
 }
 

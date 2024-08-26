@@ -62,8 +62,7 @@ is_valid_record(u32 size, u16 usa_ofs, u16 usa_count)
  *    EIO    Multi sector transfer error was detected. Magic of the NTFS
  *        record in @b will have been set to "BAAD".
  */
-int ntfs_mst_post_read_fixup_warn(NTFS_RECORD *b, const u32 size,
-                    BOOL warn)
+int ntfs_mst_post_read_fixup_warn(NTFS_RECORD *b, const u32 size, BOOL warn)
 {
     u16 usa_ofs, usa_count, usn;
     u16 *usa_pos, *data_pos;
@@ -77,12 +76,7 @@ int ntfs_mst_post_read_fixup_warn(NTFS_RECORD *b, const u32 size,
     if (!is_valid_record(size, usa_ofs, usa_count)) {
         errno = EINVAL;
         if (warn) {
-            ntfs_log_perror("%s: magic: 0x%08lx  size: %ld "
-                    "  usa_ofs: %d  usa_count: %u",
-                     __FUNCTION__,
-                    (long)le32_to_cpu(*(le32 *)b),
-                    (long)size, (int)usa_ofs,
-                    (unsigned int)usa_count);
+            ntfs_log_perror("%s: magic: 0x%08lx  size: %ld usa_ofs: %d  usa_count: %u", __FUNCTION__, (long)le32_to_cpu(*(le32 *)b), (long)size, (int)usa_ofs, (unsigned int)usa_count);
         }
         return -1;
     }

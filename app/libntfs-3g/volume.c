@@ -269,26 +269,29 @@ static int ntfs_mft_load(ntfs_volume *vol)
     }
     vol->mft_ni->mft_no = 0;
     vol->mft_ni->mrec = mb;
+
     /* Can't use any of the higher level functions yet! */
-    l = ntfs_mst_pread(vol->dev, vol->mft_lcn << vol->cluster_size_bits, 1,
-            vol->mft_record_size, mb);
+    // mtf_lcn = 4, cluster_size_bits = 12, 16KiB 偏移处
+    l = ntfs_mst_pread(vol->dev, vol->mft_lcn << vol->cluster_size_bits, 1, vol->mft_record_size, mb);
     if (l != 1) {
-        if (l != -1)
+        if (l != -1) {
             errno = EIO;
+        }
         ntfs_log_perror("Error reading $MFT");
         goto error_exit;
     }
 
-    if (ntfs_mft_record_check(vol, 0, mb))
+    if (ntfs_mft_record_check(vol, 0, mb)) {
         goto error_exit;
+    }
 
     ctx = ntfs_attr_get_search_ctx(vol->mft_ni, NULL);
-    if (!ctx)
+    if (!ctx) {
         goto error_exit;
+    }
 
     /* Find the $ATTRIBUTE_LIST attribute in $MFT if present. */
-    if (ntfs_attr_lookup(AT_ATTRIBUTE_LIST, AT_UNNAMED, 0, 0, 0, NULL, 0,
-            ctx)) {
+    if (ntfs_attr_lookup(AT_ATTRIBUTE_LIST, AT_UNNAMED, 0, 0, 0, NULL, 0, ctx)) {
         if (errno != ENOENT) {
             ntfs_log_error("$MFT has corrupt attribute list.\n");
             goto io_error_exit;
@@ -566,10 +569,12 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev, ntfs_mount_flags flags
             goto error_exit;
         }
     }
+
     /* Attach the device to the volume. */
     vol->dev = dev;
 
     /* Now read the bootsector. */
+    // 1. 解析 boot 部分
     br = ntfs_pread(dev, 0, sizeof(NTFS_BOOT_SECTOR), bs);
     if (br != sizeof(NTFS_BOOT_SECTOR)) {
         if (br != -1) {
@@ -601,10 +606,10 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev, ntfs_mount_flags flags
 
     /* We now initialize the cluster allocator. */
     vol->full_zones = 0;
-    mft_zone_size = vol->nr_clusters >> 3;      /* 12.5% */
+    mft_zone_size = vol->nr_clusters >> 3;      /* 1/8 = 12.5% */
 
     /* Setup the mft zone. */
-    vol->mft_zone_start = vol->mft_zone_pos = vol->mft_lcn;
+    vol->mft_zone_start = vol->mft_zone_pos = vol->mft_lcn;     // 4 逻辑块
     ntfs_log_debug("mft_zone_pos = 0x%llx\n", (long long)vol->mft_zone_pos);
 
     /*
@@ -616,12 +621,12 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev, ntfs_mount_flags flags
      * On non-standard volumes we don't protect it as the overhead would be
      * higher than the speed increase we would get by doing it.
      */
-    mft_lcn = (8192 + 2 * vol->cluster_size - 1) / vol->cluster_size;
+    mft_lcn = (8192 + 2 * vol->cluster_size - 1) / vol->cluster_size;       // cluster_size: 4KiB ---> 2
     if (mft_lcn * vol->cluster_size < 16 * 1024) {
-        mft_lcn = (16 * 1024 + vol->cluster_size - 1) / vol->cluster_size;
+        mft_lcn = (16 * 1024 + vol->cluster_size - 1) / vol->cluster_size;  // 3KiB
     }
 
-    if (vol->mft_zone_start <= mft_lcn) {
+    if (vol->mft_zone_start <= mft_lcn) {           // 4KiB < 3KiB
         vol->mft_zone_start = 0;
     }
 
@@ -647,7 +652,7 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev, ntfs_mount_flags flags
      * Set the current position within each data zone to the start of the
      * respective zone.
      */
-    vol->data1_zone_pos = vol->mft_zone_end;
+    vol->data1_zone_pos = vol->mft_zone_end; // data1 zone after mft
     ntfs_log_debug("data1_zone_pos = %lld\n", (long long)vol->data1_zone_pos);
     vol->data2_zone_pos = 0;
     ntfs_log_debug("data2_zone_pos = %lld\n", (long long)vol->data2_zone_pos);
@@ -980,6 +985,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
         goto error_exit;
     }
 
+    // mft
     l = ntfs_attr_mst_pread(vol->mft_na, 0, vol->mftmirr_size, vol->mft_record_size, m);
     if (l != vol->mftmirr_size) {
         if (l == -1) {
@@ -991,11 +997,14 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
         }
         goto error_exit;
     }
+    // 16 个 MFT 记录？
     for (i = 0; (i < l) && (i < FILE_first_user); ++i) {
-        if (ntfs_mft_record_check(vol, FILE_MFT + i, (MFT_RECORD*)(m + i*vol->mft_record_size))) {
+        if (ntfs_mft_record_check(vol, FILE_MFT + i, (MFT_RECORD*)(m + i * vol->mft_record_size))) {
             goto error_exit;
         }
     }
+
+    // mft 备份
     l = ntfs_attr_mst_pread(vol->mftmirr_na, 0, vol->mftmirr_size, vol->mft_record_size, m2);
     if (l != vol->mftmirr_size) {
         if (l == -1) {
@@ -1004,27 +1013,31 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
         }
         vol->mftmirr_size = l;
     }
+
+    // 16 个 MFT 记录？
     for (i = 0; (i < l) && (i < FILE_first_user); ++i) {
-        if (ntfs_mft_record_check(vol, FILE_MFT + i, (MFT_RECORD*)(m2 + i*vol->mft_record_size))) {
+        if (ntfs_mft_record_check(vol, FILE_MFT + i, (MFT_RECORD*)(m2 + i * vol->mft_record_size))) {
             goto error_exit;
         }
     }
+
     ntfs_log_debug("Comparing $MFTMirr to $MFT...\n");
 
     /* Windows 10 does not update the full $MFTMirr any more */
     for (i = 0; (i < vol->mftmirr_size) && (i < FILE_first_user); ++i) {
         MFT_RECORD *mrec, *mrec2;
-        const char *ESTR[12] = { "$MFT", "$MFTMirr", "$LogFile",
-            "$Volume", "$AttrDef", "root directory", "$Bitmap",
-            "$Boot", "$BadClus", "$Secure", "$UpCase", "$Extend" };
+        const char *ESTR[12] = { "$MFT", "$MFTMirr", "$LogFile", "$Volume", "$AttrDef", "root directory", "$Bitmap", "$Boot", "$BadClus", "$Secure", "$UpCase", "$Extend" };
         const char *s;
 
-        if (i < 12)
+        if (i < 12) {
             s = ESTR[i];
-        else if (i < 16)
+        }
+        else if (i < 16) {
             s = "system file";
-        else
+        }
+        else {
             s = "mft record";
+        }
 
         mrec = (MFT_RECORD*)(m + i * vol->mft_record_size);
         if (mrec->flags & MFT_RECORD_IN_USE) {
@@ -1037,6 +1050,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
                 goto io_error_exit;
             }
         }
+
         mrec2 = (MFT_RECORD*)(m2 + i * vol->mft_record_size);
         if (mrec2->flags & MFT_RECORD_IN_USE) {
             if (ntfs_is_baad_record(mrec2->magic)) {
@@ -1074,9 +1088,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
     }
 
     if (vol->lcnbmp_na->data_size > vol->lcnbmp_na->allocated_size) {
-        ntfs_log_error("Corrupt cluster map size (%lld > %lld)\n",
-                (long long)vol->lcnbmp_na->data_size,
-                (long long)vol->lcnbmp_na->allocated_size);
+        ntfs_log_error("Corrupt cluster map size (%lld > %lld)\n", (long long)vol->lcnbmp_na->data_size, (long long)vol->lcnbmp_na->allocated_size);
         goto io_error_exit;
     }
 
@@ -1087,6 +1099,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
         ntfs_log_perror("Failed to open inode FILE_UpCase");
         goto error_exit;
     }
+
     /* Get an ntfs attribute for $UpCase/$DATA. */
     na = ntfs_attr_open(ni, AT_DATA, AT_UNNAMED, 0);
     if (!na) {
@@ -1094,6 +1107,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
         ntfs_inode_close(ni);
         goto error_exit;
     }
+
     /*
      * Note: Normally, the upcase table has a length equal to 65536
      * 2-byte Unicode characters. Anyway we currently can only process
@@ -1113,6 +1127,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
             goto bad_upcase;
         }
     }
+
     /* Read in the $DATA attribute value into the buffer. */
     l = ntfs_attr_pread(na, 0, na->data_size, vol->upcase);
     if (l != na->data_size) {
@@ -1120,12 +1135,14 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
         errno = EIO;
         goto bad_upcase;
     }
+
     /* Done with the $UpCase mft record. */
     ntfs_attr_close(na);
     if (ntfs_inode_close(ni)) {
         ntfs_log_perror("Failed to close $UpCase");
         goto error_exit;
     }
+
     /* Consistency check of $UpCase, restricted to plain ASCII chars */
     k = 0x20;
     while ((k < vol->upcase_len) && (k < 0x7f) && (le16_to_cpu(vol->upcase[k]) == ((k < 'a') || (k > 'z') ? k : k + 'A' - 'a'))) {
@@ -1171,10 +1188,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
     /* Get a pointer to the value of the attribute. */
     vinf = (VOLUME_INFORMATION*)(le16_to_cpu(a->value_offset) + (char*)a);
     /* Sanity checks. */
-    if ((char*)vinf + le32_to_cpu(a->value_length) > (char*)ctx->mrec +
-            le32_to_cpu(ctx->mrec->bytes_in_use) ||
-            le16_to_cpu(a->value_offset) + le32_to_cpu(
-            a->value_length) > le32_to_cpu(a->length)) {
+    if ((char*)vinf + le32_to_cpu(a->value_length) > (char*)ctx->mrec + le32_to_cpu(ctx->mrec->bytes_in_use) || le16_to_cpu(a->value_offset) + le32_to_cpu(a->value_length) > le32_to_cpu(a->length)) {
         ntfs_log_error("$VOLUME_INFORMATION in $Volume is corrupt.\n");
         errno = EIO;
         goto error_exit;
@@ -1188,7 +1202,7 @@ ntfs_volume *ntfs_device_mount(struct ntfs_device *dev, ntfs_mount_flags flags)
        defined using cpu_to_le16() macro and hence are consistent. */
     vol->flags = vinf->flags;
 
-    /*
+    /**
      * Reinitialize the search context for the $Volume/$VOLUME_NAME lookup.
      */
     ntfs_attr_reinit_search_ctx(ctx);
@@ -1365,9 +1379,7 @@ error_exit:
  *    Not set in ntfs_mount() to avoid breaking existing tools.
  */
 
-int ntfs_set_shown_files(ntfs_volume *vol,
-            BOOL show_sys_files, BOOL show_hid_files,
-            BOOL hide_dot_files)
+int ntfs_set_shown_files(ntfs_volume *vol, BOOL show_sys_files, BOOL show_hid_files, BOOL hide_dot_files)
 {
     int res;
 

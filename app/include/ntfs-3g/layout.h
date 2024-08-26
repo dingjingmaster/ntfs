@@ -198,23 +198,56 @@ typedef struct
  */
 typedef enum
 {
-    FILE_MFT = 0,                                   /* Master file table (mft). Data attribute contains the entries and bitmap attribute records which ones are in use (bit==1). */
-    FILE_MFTMirr = 1,                               /* Mft mirror: copy of first four mft records in data attribute. If cluster size > 4kiB, copy of first N mft records, with N = cluster_size / mft_record_size. */
-    FILE_LogFile = 2,                               /* Journalling log in data attribute. */
-    FILE_Volume = 3,                                /* Volume name attribute and volume information attribute (flags and ntfs version). Windows refers to this file as volume DASD (Direct Access Storage Device). */
-    FILE_AttrDef = 4,                               /* Array of attribute definitions in data attribute. */
-    FILE_root = 5,                                  /* Root directory. */
-    FILE_Bitmap = 6,                                /* Allocation bitmap of all clusters (lcns) in data attribute. */
-    FILE_Boot = 7,                                  /* Boot sector (always at cluster 0) in data attribute. */
-    FILE_BadClus = 8,                               /* Contains all bad clusters in the non-resident data attribute. */
-    FILE_Secure = 9,                                /* Shared security descriptors in data attribute and two indexes into the descriptors. Appeared in Windows 2000. Before that, this file was named $Quota but was unused. */
-    FILE_UpCase = 10,                               /* Uppercase equivalents of all 65536 Unicode characters in data attribute. */
-    FILE_Extend = 11,                               /* Directory containing other system files (eg. $ObjId, $Quota, $Reparse and $UsnJrnl). This is new to NTFS3.0. */
+    FILE_MFT = 0,                                   /**
+                                                     * 主文件表(mft)。数据属性包含正在使用的条目和位图属性记录(bit==1)。
+                                                     * Master file table (mft). Data attribute contains the entries and bitmap attribute records which ones are in use (bit==1). */
+    FILE_MFTMirr = 1,                               /**
+                                                     * Mft镜像:数据属性中前四条Mft记录的副本。如果块大小> 4kiB，复制前N条mft记录，N = cluster_size / mft_record_size。
+                                                     * Mft mirror: copy of first four mft records in data attribute. If cluster size > 4kiB, copy of first N mft records, with N = cluster_size / mft_record_size. */
+    FILE_LogFile = 2,                               /**
+                                                     * 日志登录数据属性。
+                                                     * Journalling log in data attribute. */
+    FILE_Volume = 3,                                /**
+                                                     * 卷名称属性和卷信息属性(标志和ntfs版本)。
+                                                     * Windows将此文件称为卷DASD(直接访问存储设备)。
+                                                     *
+                                                     * Volume name attribute and volume information attribute (flags and ntfs version).
+                                                     * Windows refers to this file as volume DASD (Direct Access Storage Device). */
+    FILE_AttrDef = 4,                               /**
+                                                     * data属性中属性定义的数组。
+                                                     * Array of attribute definitions in data attribute. */
+    FILE_root = 5,                                  /**
+                                                     * 根目录
+                                                     * Root directory. */
+    FILE_Bitmap = 6,                                /**
+                                                     * 数据属性中所有簇的分配位图(lcns)
+                                                     * Allocation bitmap of all clusters (lcns) in data attribute. */
+    FILE_Boot = 7,                                  /**
+                                                     * 数据属性中的引导扇区(总是在块0)。
+                                                     * Boot sector (always at cluster 0) in data attribute. */
+    FILE_BadClus = 8,                               /**
+                                                     * 包含非常驻数据属性中的所有错误群集。
+                                                     * Contains all bad clusters in the non-resident data attribute. */
+    FILE_Secure = 9,                                /**
+                                                     * 数据属性中的共享安全描述符和描述符中的两个索引。
+                                                     * 出现在Windows 2000中。在此之前，该文件被命名为$Quota，但未被使用。
+                                                     * Shared security descriptors in data attribute and two indexes into the descriptors.
+                                                     * Appeared in Windows 2000. Before that, this file was named $Quota but was unused. */
+    FILE_UpCase = 10,                               /**
+                                                     * data属性中所有65536个Unicode字符的大小写。
+                                                     * Uppercase equivalents of all 65536 Unicode characters in data attribute. */
+    FILE_Extend = 11,                               /**
+                                                     * 包含其他系统文件的目录(例如。$ObjId、$Quota、$Reparse和$UsnJrnl)。
+                                                     * 这是NTFS3.0的新特性。
+                                                     * Directory containing other system files (eg. $ObjId, $Quota, $Reparse and $UsnJrnl).
+                                                     * This is new to NTFS3.0. */
     FILE_reserved12 = 12,                           /* Reserved for future use (records 12-15). */
     FILE_reserved13 = 13,
     FILE_reserved14 = 14,
     FILE_mft_data = 15,                             /* Reserved for first extent of $MFT:$DATA */
-    FILE_first_user = 16,                           /* First user file, used as test limit for whether to allow opening a file or not. */
+    FILE_first_user = 16,                           /**
+                                                     * 第一个用户文件，用作是否允许打开文件的测试限制。
+                                                     * First user file, used as test limit for whether to allow opening a file or not. */
 } NTFS_SYSTEM_FILES;
 
 /**
@@ -319,18 +352,22 @@ typedef struct
     le16 usa_ofs;                                               /* See NTFS_RECORD definition above. */
     le16 usa_count;                                             /* See NTFS_RECORD definition above. */
 
-    /*  8*/ leLSN lsn;                                          /* $LogFile sequence number for this record. Changed every time the record is modified. */
-    /* 16*/ le16 sequence_number;                               /* Number of times this mft record has been reused. (See description for MFT_REF above.) NOTE: The increment (skipping zero) is done when the file is deleted. NOTE: If this is zero it is left zero. */
-    /* 18*/ le16 link_count;                                    /* Number of hard links, i.e. the number of directory entries referencing this record. NOTE: Only used in mft base records. NOTE: When deleting a directory entry we check the link_count and if it is 1 we delete the file. Otherwise we delete the FILE_NAME_ATTR being referenced by the directory entry from the mft record and decrement the link_count. FIXME: Careful with Win32 + DOS names! */
-    /* 20*/ le16 attrs_offset;                                  /* Byte offset to the first attribute in this mft record from the start of the mft record. NOTE: Must be aligned to 8-byte boundary. */
-    /* 22*/ MFT_RECORD_FLAGS flags;                             /* Bit array of MFT_RECORD_FLAGS. When a file is deleted, the MFT_RECORD_IN_USE flag is set to zero. */
-    /* 24*/ le32 bytes_in_use;                                  /* Number of bytes used in this mft record. NOTE: Must be aligned to 8-byte boundary. */
-    /* 28*/ le32 bytes_allocated;                               /* Number of bytes allocated for this mft record. This should be equal to the mft record size. */
+    /*  8*/ leLSN lsn;                                          /* $LogFile这个记录的序列号。每次修改记录时更改。
+                                                                 * $LogFile sequence number for this record. Changed every time the record is modified. */
+    /* 16*/ le16 sequence_number;                               /* 此mft记录被重用的次数。(参见上面对MFT_REF的描述。)注意:增量(跳过零)是在文件被删除时完成的。注意:如果为零，则为左零。
+                                                                 * Number of times this mft record has been reused. (See description for MFT_REF above.) NOTE: The increment (skipping zero) is done when the file is deleted. NOTE: If this is zero it is left zero. */
+    /* 18*/ le16 link_count;                                    /* 硬链接的数量，即引用该记录的目录条目的数量。注意:仅用于mft基记录。注意:当删除目录条目时，我们检查link_count，如果它是1，我们删除该文件。否则，我们从mft记录中删除目录条目所引用的FILE_NAME_ATTR，并减少link_count。修复:小心Win32 + DOS的名字!
+                                                                 * Number of hard links, i.e. the number of directory entries referencing this record. NOTE: Only used in mft base records. NOTE: When deleting a directory entry we check the link_count and if it is 1 we delete the file. Otherwise we delete the FILE_NAME_ATTR being referenced by the directory entry from the mft record and decrement the link_count. FIXME: Careful with Win32 + DOS names! */
+    /* 20*/ le16 attrs_offset;                                  /* 从mft记录开始到该mft记录中第一个属性的字节偏移量。注意:必须对齐到8字节边界。Byte offset to the first attribute in this mft record from the start of the mft record. NOTE: Must be aligned to 8-byte boundary. */
+    /* 22*/ MFT_RECORD_FLAGS flags;                             /* MFT_RECORD_FLAGS的位数组。当文件被删除时，MFT_RECORD_IN_USE标志被设置为零。Bit array of MFT_RECORD_FLAGS. When a file is deleted, the MFT_RECORD_IN_USE flag is set to zero. */
+    /* 24*/ le32 bytes_in_use;                                  /* 该mft记录中使用的字节数。注意:必须对齐到8字节边界。Number of bytes used in this mft record. NOTE: Must be aligned to 8-byte boundary. */
+    /* 28*/ le32 bytes_allocated;                               /* 为该mft记录分配的字节数。这应该等于mft记录的大小。 Number of bytes allocated for this mft record. This should be equal to the mft record size. */
     /* 32*/ leMFT_REF base_mft_record;
     /* This is zero for base mft records. 
      * When it is not zero it is a mft reference pointing to the base mft record to which this record belongs 
      * (this is then used to locate the attribute list attribute present in the base record which describes this extension record and hence might need modification when the extension record itself is modified, also locating the attribute list also means finding the other potential extents, belonging to the non-base mft record). */
-    /* 40*/ le16 next_attr_instance;                            /* The instance number that will be assigned to the next attribute added to this mft record. 
+    /* 40*/ le16 next_attr_instance;                            /* 将分配给添加到此mft记录的下一个属性的实例号。
+                                                                 * The instance number that will be assigned to the next attribute added to this mft record.
                                                                  * NOTE: Incremented each time after it is used. 
                                                                  * NOTE: Every time the mft record is reused this number is set to zero. 
                                                                  * NOTE: The first instance number is always 0. */
@@ -627,101 +664,73 @@ typedef enum
 typedef struct
 {
     /*Ofs*/
-    /*  0*/ ATTR_TYPES type; /* The (32-bit) type of the attribute. */
-    /*  4*/ le32 length; /* Byte size of the resident part of the
-             attribute (aligned to 8-byte boundary).
-             Used to get to the next attribute. */
-    /*  8*/ u8 non_resident; /* If 0, attribute is resident.
-                 If 1, attribute is non-resident. */
-    /*  9*/ u8 name_length; /* Unicode character size of name of attribute.
-             0 if unnamed. */
-    /* 10*/ le16 name_offset; /* If name_length != 0, the byte offset to the
-                 beginning of the name from the attribute
-                 record. Note that the name is stored as a
-                 Unicode string. When creating, place offset
-                 just at the end of the record header. Then,
-                 follow with attribute value or mapping pairs
-                 array, resident and non-resident attributes
-                 respectively, aligning to an 8-byte
-                 boundary. */
-    /* 12*/ ATTR_FLAGS flags; /* Flags describing the attribute. */
-    /* 14*/ le16 instance; /* The instance of this attribute record. This
-             number is unique within this mft record (see
-             MFT_RECORD/next_attribute_instance notes
-             above for more details). */
+    /*  0*/ ATTR_TYPES type;            /**
+                                         * 属性类型
+                                         * The (32-bit) type of the attribute. */
+    /*  4*/ le32 length;                /**
+                                         * 属性驻留部分的长度，用于寻找下一个属性
+                                         * Byte size of the resident part of the attribute (aligned to 8-byte boundary). Used to get to the next attribute. */
+    /*  8*/ u8 non_resident;            /* 0：常驻属性
+                                         * 1：非常驻属性
+                                         *  If 0, attribute is resident.
+                                         *  If 1, attribute is non-resident. */
+    /*  9*/ u8 name_length;             /* 属性名
+                                         * Unicode character size of name of attribute. 0 if unnamed. */
+    /* 10*/ le16 name_offset;           /*
+                                         * If name_length != 0, the byte offset to the beginning of the name from the attribute record.
+                                         * Note that the name is stored as a Unicode string.
+                                         * When creating, place offset just at the end of the record header.
+                                         * Then, follow with attribute value or mapping pairs array, resident and non-resident attributes respectively,
+                                         * aligning to an 8-byte boundary. */
+    /* 12*/ ATTR_FLAGS flags;           /**
+                                         * Flags describing the attribute. */
+    /* 14*/ le16 instance;              /**
+                                         * The instance of this attribute record.
+                                         * This number is unique within this mft record
+                                         * (see MFT_RECORD/next_attribute_instance notes above for more details). */
     /* 16*/ union
     {
         /* Resident attributes. */
         struct
         {
-            /* 16 */ le32 value_length; /* Byte size of attribute value. */
-            /* 20 */ le16 value_offset; /* Byte offset of the attribute
-                                value from the start of the
-                                attribute record. When creating,
-                                align to 8-byte boundary if we
-                                have a name present as this might
-                                not have a length of a multiple
-                                of 8-bytes. */
+            /* 16 */ le32 value_length; /**
+                                         * Byte size of attribute value. */
+            /* 20 */ le16 value_offset; /**
+                                         * Byte offset of the attribute value from the start of the attribute record.
+                                         * When creating, align to 8-byte boundary if we have a name present as this might not have a length of a multiple of 8-bytes. */
             /* 22 */ RESIDENT_ATTR_FLAGS resident_flags; /* See above. */
-            /* 23 */ s8 reservedR; /* Reserved/alignment to 8-byte
-                         boundary. */
-            /* 24 */ void *resident_end[0]; /* Use offsetof(ATTR_RECORD,
-                               resident_end) to get size of
-                               a resident attribute. */
+            /* 23 */ s8 reservedR;            /* Reserved/alignment to 8-byte boundary. */
+            /* 24 */ void *resident_end[0];   /* Use offsetof(ATTR_RECORD, resident_end) to get size of a resident attribute. */
         } __attribute__ ((__packed__));
         /* Non-resident attributes. */
         struct
         {
-            /* 16*/ leVCN lowest_vcn; /* Lowest valid virtual cluster number
-              for this portion of the attribute value or
-              0 if this is the only extent (usually the
-              case). - Only when an attribute list is used
-              does lowest_vcn != 0 ever occur. */
-            /* 24*/ leVCN highest_vcn; /* Highest valid vcn of this extent of
-                 the attribute value. - Usually there is only one
-                 portion, so this usually equals the attribute
-                 value size in clusters minus 1. Can be -1 for
-                 zero length files. Can be 0 for "single extent"
-                 attributes. */
-            /* 32*/ le16 mapping_pairs_offset; /* Byte offset from the
-                 beginning of the structure to the mapping pairs
-                 array which contains the mappings between the
-                 vcns and the logical cluster numbers (lcns).
-                 When creating, place this at the end of this
-                 record header aligned to 8-byte boundary. */
-            /* 34*/ u8 compression_unit; /* The compression unit expressed
-                 as the log to the base 2 of the number of
-                 clusters in a compression unit. 0 means not
-                 compressed. (This effectively limits the
-                 compression unit size to be a power of two
-                 clusters.) WinNT4 only uses a value of 4. */
-            /* 35*/ u8 reserved1[5]; /* Align to 8-byte boundary. */
+            /* 16*/ leVCN lowest_vcn;           /* Lowest valid virtual cluster number for this portion of the attribute value or 0 if this is the only extent (usually the case).
+                                                 * - Only when an attribute list is used does lowest_vcn != 0 ever occur. */
+            /* 24*/ leVCN highest_vcn;          /* Highest valid vcn of this extent of the attribute value.
+                                                 * - Usually there is only one portion, so this usually equals the attribute value size in clusters minus
+                                                 * 1. Can be -1 for zero length files. Can be 0 for "single extent" attributes. */
+            /* 32*/ le16 mapping_pairs_offset;  /**
+                                                 * 从结构的开头到映射对数组的字节偏移量，映射对数组包含vcns和逻辑簇号(lcns)之间的映射。
+                                                 * 创建时，将其放置在与8字节边界对齐的记录头的末尾。
+                                                 * Byte offset from the beginning of the structure to the mapping pairs array which contains the mappings between the vcns and the logical cluster numbers (lcns).
+                                                 * When creating, place this at the end of this record header aligned to 8-byte boundary. */
+            /* 34*/ u8 compression_unit;        /* The compression unit expressed as the log to the base 2 of the number of clusters in a compression unit.
+                                                 * 0 means not compressed. (This effectively limits the compression unit size to be a power of two clusters.) WinNT4 only uses a value of 4. */
+            /* 35*/ u8 reserved1[5];            /* Align to 8-byte boundary. */
             /* The sizes below are only used when lowest_vcn is zero, as otherwise it would
                be difficult to keep them up-to-date.*/
-            /* 40*/ sle64 allocated_size; /* Byte size of disk space
-              allocated to hold the attribute value. Always
-              is a multiple of the cluster size. When a file
-              is compressed, this field is a multiple of the
-              compression block size (2^compression_unit) and
-              it represents the logically allocated space
-              rather than the actual on disk usage. For this
-              use the compressed_size (see below). */
-            /* 48*/ sle64 data_size; /* Byte size of the attribute
-              value. Can be larger than allocated_size if
-              attribute value is compressed or sparse. */
-            /* 56*/ sle64 initialized_size; /* Byte size of initialized
-              portion of the attribute value. Usually equals
-              data_size. */
-            /* 64 */ void *non_resident_end[0]; /* Use offsetof(ATTR_RECORD,
-                                   non_resident_end) to get
-                                   size of a non resident
-                                   attribute. */
+            /* 40*/ sle64 allocated_size;       /* Byte size of disk space allocated to hold the attribute value. Always is a multiple of the cluster size.
+                                                 * When a file is compressed, this field is a multiple of the compression block size (2^compression_unit) and it represents the logically allocated space rather than the actual on disk usage.
+                                                 * For this use the compressed_size (see below). */
+            /* 48*/ sle64 data_size;            /* Byte size of the attribute value. Can be larger than allocated_size if attribute value is compressed or sparse. */
+            /* 56*/ sle64 initialized_size;     /* Byte size of initialized portion of the attribute value. Usually equals data_size. */
+            /* 64 */ void *non_resident_end[0]; /* Use offsetof(ATTR_RECORD, non_resident_end) to get size of a non resident attribute. */
             /* sizeof(uncompressed attr) = 64*/
-            /* 64*/ sle64 compressed_size; /* Byte size of the attribute
-              value after compression. Only present when
-              compressed. Always is a multiple of the
-              cluster size. Represents the actual amount of
-              disk space being used on the disk. */
+            /* 64*/ sle64 compressed_size;      /* Byte size of the attribute value after compression.
+                                                 * Only present when compressed.
+                                                 * Always is a multiple of the cluster size.
+                                                 * Represents the actual amount of disk space being used on the disk. */
             /* 72 */ void *compressed_end[0];
             /* Use offsetof(ATTR_RECORD, compressed_end) to
                get size of a compressed attribute. */
@@ -1865,10 +1874,10 @@ typedef SECURITY_DESCRIPTOR_RELATIVE SECURITY_DESCRIPTOR_ATTR;
  */
 typedef struct
 {
-    le32 hash; /* Hash of the security descriptor. */
-    le32 security_id; /* The security_id assigned to the descriptor. */
-    le64 offset; /* Byte offset of this entry in the $SDS stream. */
-    le32 length; /* Size in bytes of this entry in $SDS stream. */
+    le32 hash;                                /* Hash of the security descriptor. */
+    le32 security_id;                         /* The security_id assigned to the descriptor. */
+    le64 offset;                              /* Byte offset of this entry in the $SDS stream. */
+    le32 length;                              /* Size in bytes of this entry in $SDS stream. */
 } __attribute__ ((__packed__)) SECURITY_DESCRIPTOR_HEADER;
 
 /**
@@ -1876,12 +1885,11 @@ typedef struct
  */
 typedef struct
 {
-    le32 hash; /* Hash of the security descriptor. */
-    le32 security_id; /* The security_id assigned to the descriptor. */
-    le64 offset; /* Byte offset of this entry in the $SDS stream. */
-    le32 length; /* Size in bytes of this entry in $SDS stream. */
-    le32 reserved_II; /* Padding - always unicode "II" or zero. This field
-                isn't counted in INDEX_ENTRY's data_length. */
+    le32 hash;                                /* Hash of the security descriptor. */
+    le32 security_id;                         /* The security_id assigned to the descriptor. */
+    le64 offset;                              /* Byte offset of this entry in the $SDS stream. */
+    le32 length;                              /* Size in bytes of this entry in $SDS stream. */
+    le32 reserved_II;                         /* Padding - always unicode "II" or zero. This field isn't counted in INDEX_ENTRY's data_length. */
 } __attribute__ ((__packed__)) SDH_INDEX_DATA;
 
 /**
@@ -1904,14 +1912,12 @@ typedef SECURITY_DESCRIPTOR_HEADER SII_INDEX_DATA;
  */
 typedef struct
 {
-    /*  0    SECURITY_DESCRIPTOR_HEADER; -- Unfolded here as gcc doesn't like
-                           unnamed structs. */
-    le32 hash; /* Hash of the security descriptor. */
-    le32 security_id; /* The security_id assigned to the descriptor. */
-    le64 offset; /* Byte offset of this entry in the $SDS stream. */
-    le32 length; /* Size in bytes of this entry in $SDS stream. */
-    /* 20*/ SECURITY_DESCRIPTOR_RELATIVE sid; /* The self-relative security
-                          descriptor. */
+    /*  0    SECURITY_DESCRIPTOR_HEADER; -- Unfolded here as gcc doesn't like unnamed structs. */
+    le32 hash;                                /* Hash of the security descriptor. */
+    le32 security_id;                         /* The security_id assigned to the descriptor. */
+    le64 offset;                              /* Byte offset of this entry in the $SDS stream. */
+    le32 length;                              /* Size in bytes of this entry in $SDS stream. */
+    /* 20*/ SECURITY_DESCRIPTOR_RELATIVE sid; /* The self-relative security descriptor. */
 } __attribute__ ((__packed__)) SDS_ENTRY;
 
 /**
@@ -1921,7 +1927,7 @@ typedef struct
  */
 typedef struct
 {
-    le32 security_id; /* The security_id assigned to the descriptor. */
+    le32 security_id;                         /* The security_id assigned to the descriptor. */
 } __attribute__ ((__packed__)) SII_INDEX_KEY;
 
 /**
@@ -1932,8 +1938,8 @@ typedef struct
  */
 typedef struct
 {
-    le32 hash; /* Hash of the security descriptor. */
-    le32 security_id; /* The security_id assigned to the descriptor. */
+    le32 hash;                                /* Hash of the security descriptor. */
+    le32 security_id;                         /* The security_id assigned to the descriptor. */
 } __attribute__ ((__packed__)) SDH_INDEX_KEY;
 
 /**
@@ -1944,7 +1950,7 @@ typedef struct
  */
 typedef struct
 {
-    ntfschar name[0]; /* The name of the volume in Unicode. */
+    ntfschar name[0];                         /* The name of the volume in Unicode. */
 } __attribute__ ((__packed__)) VOLUME_NAME;
 
 /**
@@ -1952,15 +1958,15 @@ typedef struct
  */
 typedef enum
 {
-    VOLUME_IS_DIRTY = const_cpu_to_le16 (0x0001),
-    VOLUME_RESIZE_LOG_FILE = const_cpu_to_le16 (0x0002),
-    VOLUME_UPGRADE_ON_MOUNT = const_cpu_to_le16 (0x0004),
-    VOLUME_MOUNTED_ON_NT4 = const_cpu_to_le16 (0x0008),
-    VOLUME_DELETE_USN_UNDERWAY = const_cpu_to_le16 (0x0010),
-    VOLUME_REPAIR_OBJECT_ID = const_cpu_to_le16 (0x0020),
-    VOLUME_CHKDSK_UNDERWAY = const_cpu_to_le16 (0x4000),
-    VOLUME_MODIFIED_BY_CHKDSK = const_cpu_to_le16 (0x8000),
-    VOLUME_FLAGS_MASK = const_cpu_to_le16 (0xc03f),
+    VOLUME_IS_DIRTY             = const_cpu_to_le16 (0x0001),
+    VOLUME_RESIZE_LOG_FILE      = const_cpu_to_le16 (0x0002),
+    VOLUME_UPGRADE_ON_MOUNT     = const_cpu_to_le16 (0x0004),
+    VOLUME_MOUNTED_ON_NT4       = const_cpu_to_le16 (0x0008),
+    VOLUME_DELETE_USN_UNDERWAY  = const_cpu_to_le16 (0x0010),
+    VOLUME_REPAIR_OBJECT_ID     = const_cpu_to_le16 (0x0020),
+    VOLUME_CHKDSK_UNDERWAY      = const_cpu_to_le16 (0x4000),
+    VOLUME_MODIFIED_BY_CHKDSK   = const_cpu_to_le16 (0x8000),
+    VOLUME_FLAGS_MASK           = const_cpu_to_le16 (0xc03f),
 } __attribute__ ((__packed__)) VOLUME_FLAGS;
 
 /**
@@ -1973,10 +1979,10 @@ typedef enum
  */
 typedef struct
 {
-    le64 reserved; /* Not used (yet?). */
-    u8 major_ver; /* Major version of the ntfs format. */
-    u8 minor_ver; /* Minor version of the ntfs format. */
-    VOLUME_FLAGS flags; /* Bit array of VOLUME_* flags. */
+    le64 reserved;                            /* Not used (yet?). */
+    u8 major_ver;                             /* Major version of the ntfs format. */
+    u8 minor_ver;                             /* Minor version of the ntfs format. */
+    VOLUME_FLAGS flags;                       /* Bit array of VOLUME_* flags. */
 } __attribute__ ((__packed__)) VOLUME_INFORMATION;
 
 /**
@@ -1988,7 +1994,7 @@ typedef struct
  */
 typedef struct
 {
-    u8 data[0]; /* The file's data contents. */
+    u8 data[0];                               /* The file's data contents. */
 } __attribute__ ((__packed__)) DATA_ATTR;
 
 /**
@@ -1996,22 +2002,30 @@ typedef struct
  */
 typedef enum
 {
-    /* When index header is in an index root attribute: */
-    SMALL_INDEX = 0, /* The index is small enough to fit inside the
-             index root attribute and there is no index
-             allocation attribute present. */
-    LARGE_INDEX = 1, /* The index is too large to fit in the index
-             root attribute and/or an index allocation
-             attribute is present. */
-    /*
-     * When index header is in an index block, i.e. is part of index
-     * allocation attribute:
+    /**
+     * 当index header位于索引根属性中:
+     *
+     * When index header is in an index root attribute: */
+    SMALL_INDEX = 0,                          /**
+                                               * 索引足够小，可以放入索引根属性中，并且不存在索引分配属性。
+                                               * The index is small enough to fit inside the index root attribute and there is no index allocation attribute present. */
+    LARGE_INDEX = 1,                          /**
+                                               * 索引太大，无法放入索引根属性或存在索引分配属性。
+                                               * The index is too large to fit in the index root attribute and/or an index allocation attribute is present. */
+    /**
+     * 当索引头在索引块中，即是索引分配属性的一部分:
+     *
+     * When index header is in an index block, i.e. is part of index allocation attribute:
      */
-    LEAF_NODE = 0, /* This is a leaf node, i.e. there are no more
-             nodes branching off it. */
-    INDEX_NODE = 1, /* This node indexes other nodes, i.e. is not a
-             leaf node. */
-    NODE_MASK = 1, /* Mask for accessing the *_NODE bits. */
+    LEAF_NODE = 0,                            /**
+                                               * 这是一个叶节点，也就是说，没有更多的节点从它分支出去
+                                               * This is a leaf node, i.e. there are no more nodes branching off it. */
+    INDEX_NODE = 1,                           /**
+                                               * 该节点索引其他节点，即不是叶节点。
+                                               * This node indexes other nodes, i.e. is not a leaf node. */
+    NODE_MASK = 1,                            /**
+                                               * 访问*_NODE位的掩码。
+                                               * Mask for accessing the *_NODE bits. */
 } __attribute__ ((__packed__)) INDEX_HEADER_FLAGS;
 
 /**
@@ -2027,12 +2041,15 @@ typedef enum
  */
 typedef struct
 {
-    /*  0*/ le32 entries_offset; /* Byte offset from the INDEX_HEADER to first
-                 INDEX_ENTRY, aligned to 8-byte boundary.  */
-    /*  4*/ le32 index_length; /* Data size in byte of the INDEX_ENTRY's,
-                 including the INDEX_HEADER, aligned to 8. */
-    /*  8*/ le32 allocated_size; /* Allocated byte size of this index (block),
-                 multiple of 8 bytes. See more below.      */
+    /*  0*/ le32 entries_offset;              /**
+                                               * 从INDEX_HEADER到第一个INDEX_ENTRY的字节偏移量，对齐到8字节边界。
+                                               * Byte offset from the INDEX_HEADER to first INDEX_ENTRY, aligned to 8-byte boundary. */
+    /*  4*/ le32 index_length;                /**
+                                               * 以字节为单位的INDEX_ENTRY的数据大小，包括INDEX_HEADER，对齐为8。
+                                               * Data size in byte of the INDEX_ENTRY's, including the INDEX_HEADER, aligned to 8. */
+    /*  8*/ le32 allocated_size;              /**
+                                               * 该索引(块)的已分配字节大小，为8字节的倍数。详见下文。
+                                               * Allocated byte size of this index (block), multiple of 8 bytes. See more below. */
     /*
        For the index root attribute, the above two numbers are always
        equal, as the attribute is resident and it is resized as needed.
@@ -2042,8 +2059,10 @@ typedef struct
        by the corresponding INDEX_ROOT attribute minus the INDEX_BLOCK
        size not counting the INDEX_HEADER part (i.e. minus -24).
      */
-    /* 12*/ INDEX_HEADER_FLAGS ih_flags; /* Bit field of INDEX_HEADER_FLAGS.  */
-    /* 13*/ u8 reserved[3]; /* Reserved/align to 8-byte boundary.*/
+    /* 12*/ INDEX_HEADER_FLAGS ih_flags;      /**
+                                               * INDEX_HEADER_FLAGS的位字段。
+                                               * Bit field of INDEX_HEADER_FLAGS.  */
+    /* 13*/ u8 reserved[3];                   /* Reserved/align to 8-byte boundary.*/
     /* sizeof() == 16 */
 } __attribute__ ((__packed__)) INDEX_HEADER;
 
@@ -2068,22 +2087,25 @@ typedef struct
  */
 typedef struct
 {
-    /*  0*/ ATTR_TYPES type; /* Type of the indexed attribute. Is
-                 $FILE_NAME for directories, zero
-                 for view indexes. No other values
-                 allowed. */
-    /*  4*/ COLLATION_RULES collation_rule; /* Collation rule used to sort the
-                     index entries. If type is $FILE_NAME,
-                     this must be COLLATION_FILE_NAME. */
-    /*  8*/ le32 index_block_size; /* Size of index block in bytes (in
-                 the index allocation attribute). */
-    /* 12*/ s8 clusters_per_index_block; /* Size of index block in clusters (in
-                     the index allocation attribute), when
-                     an index block is >= than a cluster,
-                     otherwise sectors per index block. */
-    /* 13*/ u8 reserved[3]; /* Reserved/align to 8-byte boundary. */
-    /* 16*/ INDEX_HEADER index; /* Index header describing the
-                 following index entries. */
+    /*  0*/ ATTR_TYPES type;                  /**
+                                               * 索引属性的类型。对于目录为$FILE_NAME，对于视图索引为0。不允许其他值。
+                                               * Type of the indexed attribute. Is $FILE_NAME for directories, zero for view indexes. No other values allowed. */
+    /*  4*/ COLLATION_RULES collation_rule;   /**
+                                               * 用于对索引项进行排序的排序规则。如果type为$FILE_NAME，则必须为COLLATION_FILE_NAME。
+                                               * Collation rule used to sort the index entries. If type is $FILE_NAME, this must be COLLATION_FILE_NAME. */
+    /*  8*/ le32 index_block_size;            /**
+                                               * 索引块的大小，以字节为单位(在索引分配属性中)。
+                                               * Size of index block in bytes (in the index allocation attribute). */
+    /* 12*/ s8 clusters_per_index_block;      /**
+                                               * 簇中索引块的大小(在索引分配属性中);
+                                               * 当一个索引块>=大于一个簇时，否则每个索引块扇区。
+                                               *
+                                               * Size of index block in clusters (in the index allocation attribute),
+                                               * when an index block is >= than a cluster, otherwise sectors per index block. */
+    /* 13*/ u8 reserved[3];                   /* Reserved/align to 8-byte boundary. */
+    /* 16*/ INDEX_HEADER index;               /**
+                                               * 描述以下索引项的索引头。
+                                               * Index header describing the following index entries. */
     /* sizeof()= 32 bytes */
 } __attribute__ ((__packed__)) INDEX_ROOT;
 
@@ -2099,14 +2121,16 @@ typedef struct
 typedef struct
 {
     /*  0    NTFS_RECORD; -- Unfolded here as gcc doesn't like unnamed structs. */
-    NTFS_RECORD_TYPES magic; /* Magic is "INDX". */
-    le16 usa_ofs; /* See NTFS_RECORD definition. */
-    le16 usa_count; /* See NTFS_RECORD definition. */
+    NTFS_RECORD_TYPES magic;                /* Magic is "INDX". */
+    le16 usa_ofs;                           /* See NTFS_RECORD definition. */
+    le16 usa_count;                         /* See NTFS_RECORD definition. */
 
-    /*  8*/ leLSN lsn; /* $LogFile sequence number of the last
-             modification of this index block. */
-    /* 16*/ leVCN index_block_vcn; /* Virtual cluster number of the index block. */
-    /* 24*/ INDEX_HEADER index; /* Describes the following index entries. */
+    /*  8*/ leLSN lsn;                      /* $LogFile该索引块最后修改的序号。
+                                             * $LogFile sequence number of the last modification of this index block. */
+    /* 16*/ leVCN index_block_vcn;          /**
+                                             * 索引块的虚拟簇号。
+                                             * Virtual cluster number of the index block. */
+    /* 24*/ INDEX_HEADER index;             /* Describes the following index entries. */
     /* sizeof()= 40 (0x28) bytes */
     /*
      * When creating the index block, we place the update sequence array at this
@@ -2134,9 +2158,10 @@ typedef INDEX_BLOCK INDEX_ALLOCATION;
  */
 typedef struct
 {
-    le32 reparse_tag; /* Reparse point type (inc. flags). */
-    leMFT_REF file_id; /* Mft record of the file containing the
-                reparse point attribute. */
+    le32 reparse_tag;                       /* Reparse point type (inc. flags). */
+    leMFT_REF file_id;                      /**
+                                             * 包含重解析点属性的文件的Mft记录。
+                                             * Mft record of the file containing the reparse point attribute. */
 } __attribute__ ((__packed__)) REPARSE_INDEX_KEY;
 
 /**
@@ -2145,23 +2170,22 @@ typedef struct
 typedef enum
 {
     /* The user quota flags. Names explain meaning. */
-    QUOTA_FLAG_DEFAULT_LIMITS = const_cpu_to_le32 (0x00000001),
-    QUOTA_FLAG_LIMIT_REACHED = const_cpu_to_le32 (0x00000002),
-    QUOTA_FLAG_ID_DELETED = const_cpu_to_le32 (0x00000004),
-
-    QUOTA_FLAG_USER_MASK = const_cpu_to_le32 (0x00000007),
+    QUOTA_FLAG_DEFAULT_LIMITS       = const_cpu_to_le32 (0x00000001),
+    QUOTA_FLAG_LIMIT_REACHED        = const_cpu_to_le32 (0x00000002),
+    QUOTA_FLAG_ID_DELETED           = const_cpu_to_le32 (0x00000004),
+    QUOTA_FLAG_USER_MASK            = const_cpu_to_le32 (0x00000007),
     /* Bit mask for user quota flags. */
 
     /* These flags are only present in the quota defaults index entry,
        i.e. in the entry where owner_id = QUOTA_DEFAULTS_ID. */
-    QUOTA_FLAG_TRACKING_ENABLED = const_cpu_to_le32 (0x00000010),
-    QUOTA_FLAG_ENFORCEMENT_ENABLED = const_cpu_to_le32 (0x00000020),
-    QUOTA_FLAG_TRACKING_REQUESTED = const_cpu_to_le32 (0x00000040),
-    QUOTA_FLAG_LOG_THRESHOLD = const_cpu_to_le32 (0x00000080),
-    QUOTA_FLAG_LOG_LIMIT = const_cpu_to_le32 (0x00000100),
-    QUOTA_FLAG_OUT_OF_DATE = const_cpu_to_le32 (0x00000200),
-    QUOTA_FLAG_CORRUPT = const_cpu_to_le32 (0x00000400),
-    QUOTA_FLAG_PENDING_DELETES = const_cpu_to_le32 (0x00000800),
+    QUOTA_FLAG_TRACKING_ENABLED     = const_cpu_to_le32 (0x00000010),
+    QUOTA_FLAG_ENFORCEMENT_ENABLED  = const_cpu_to_le32 (0x00000020),
+    QUOTA_FLAG_TRACKING_REQUESTED   = const_cpu_to_le32 (0x00000040),
+    QUOTA_FLAG_LOG_THRESHOLD        = const_cpu_to_le32 (0x00000080),
+    QUOTA_FLAG_LOG_LIMIT            = const_cpu_to_le32 (0x00000100),
+    QUOTA_FLAG_OUT_OF_DATE          = const_cpu_to_le32 (0x00000200),
+    QUOTA_FLAG_CORRUPT              = const_cpu_to_le32 (0x00000400),
+    QUOTA_FLAG_PENDING_DELETES      = const_cpu_to_le32 (0x00000800),
 } QUOTA_FLAGS;
 
 /**
@@ -2189,22 +2213,19 @@ typedef enum
  */
 typedef struct
 {
-    le32 version; /* Currently equals 2. */
-    QUOTA_FLAGS flags; /* Flags describing this quota entry. */
-    le64 bytes_used; /* How many bytes of the quota are in use. */
-    sle64 change_time; /* Last time this quota entry was changed. */
-    sle64 threshold; /* Soft quota (-1 if not limited). */
-    sle64 limit; /* Hard quota (-1 if not limited). */
-    sle64 exceeded_time; /* How long the soft quota has been exceeded. */
+    le32 version;                             /* Currently equals 2. */
+    QUOTA_FLAGS flags;                        /* Flags describing this quota entry. */
+    le64 bytes_used;                          /* How many bytes of the quota are in use. */
+    sle64 change_time;                        /* Last time this quota entry was changed. */
+    sle64 threshold;                          /* Soft quota (-1 if not limited). */
+    sle64 limit;                              /* Hard quota (-1 if not limited). */
+    sle64 exceeded_time;                      /* How long the soft quota has been exceeded. */
+
     /* The below field is NOT present for the quota defaults entry. */
-    SID sid; /* The SID of the user/object associated with
-            this quota entry. If this field is missing
-            then the INDEX_ENTRY is padded to a multiple
-            of 8 with zeros which are not counted in
-            the data_length field. If the sid is present
-            then this structure is padded with zeros to
-            a multiple of 8 and the padding is counted in
-            the INDEX_ENTRY's data_length. */
+    SID sid;                                  /**
+                                               * The SID of the user/object associated with this quota entry.
+                                               * If this field is missing then the INDEX_ENTRY is padded to a multiple of 8 with zeros which are not counted in the data_length field.
+                                               * If the sid is present then this structure is padded with zeros to a multiple of 8 and the padding is counted in the INDEX_ENTRY's data_length. */
 } __attribute__ ((__packed__)) QUOTA_CONTROL_ENTRY;
 
 /**
@@ -2213,9 +2234,9 @@ typedef struct
 typedef struct
 {
     le32 owner_id;
-    le32 unknown; /* Always 32. Seems to be padding and it's not
-            counted in the INDEX_ENTRY's data_length.
-            This field shouldn't be really here. */
+    le32 unknown;                             /**
+                                               * Always 32. Seems to be padding and it's not counted in the INDEX_ENTRY's data_length.
+                                               * This field shouldn't be really here. */
 } __attribute__ ((__packed__)) QUOTA_O_INDEX_DATA;
 
 /**
@@ -2223,9 +2244,9 @@ typedef struct
  */
 typedef enum
 {
-    QUOTA_INVALID_ID = const_cpu_to_le32 (0x00000000),
-    QUOTA_DEFAULTS_ID = const_cpu_to_le32 (0x00000001),
-    QUOTA_FIRST_USER_ID = const_cpu_to_le32 (0x00000100),
+    QUOTA_INVALID_ID      = const_cpu_to_le32 (0x00000000),
+    QUOTA_DEFAULTS_ID     = const_cpu_to_le32 (0x00000001),
+    QUOTA_FIRST_USER_ID   = const_cpu_to_le32 (0x00000100),
 } PREDEFINED_OWNER_IDS;
 
 /**
@@ -2233,15 +2254,10 @@ typedef enum
  */
 typedef enum
 {
-    INDEX_ENTRY_NODE = const_cpu_to_le16 (1), /* This entry contains a
-                     sub-node, i.e. a reference to an index
-                     block in form of a virtual cluster
-                     number (see below). */
-    INDEX_ENTRY_END = const_cpu_to_le16 (2), /* This signifies the last
-                    entry in an index block. The index
-                    entry does not represent a file but it
-                    can point to a sub-node. */
-    INDEX_ENTRY_SPACE_FILLER = 0xffff, /* Just to force 16-bit width. */
+    INDEX_ENTRY_NODE            = const_cpu_to_le16 (1),      /**
+                                                               * This entry contains a sub-node, i.e. a reference to an index block in form of a virtual cluster number (see below). */
+    INDEX_ENTRY_END             = const_cpu_to_le16 (2),      /* This signifies the last entry in an index block. The index entry does not represent a file but it can point to a sub-node. */
+    INDEX_ENTRY_SPACE_FILLER    = 0xffff,                     /* Just to force 16-bit width. */
 } __attribute__ ((__packed__)) INDEX_ENTRY_FLAGS;
 
 /**
@@ -2284,48 +2300,36 @@ typedef struct
     /*  0    INDEX_ENTRY_HEADER; -- Unfolded here as gcc dislikes unnamed structs. */
     union
     { /* Only valid when INDEX_ENTRY_END is not set. */
-        leMFT_REF indexed_file; /* The mft reference of the file
-                    described by this index
-                    entry. Used for directory
-                    indexes. */
+        leMFT_REF indexed_file;                                 /* The mft reference of the file described by this index entry. Used for directory indexes. */
         struct
         { /* Used for views/indexes to find the entry's data. */
-            le16 data_offset; /* Data byte offset from this
-                        INDEX_ENTRY. Follows the
-                        index key. */
-            le16 data_length; /* Data length in bytes. */
-            le32 reservedV; /* Reserved (zero). */
+            le16 data_offset;                                   /* Data byte offset from this INDEX_ENTRY. Follows the index key. */
+            le16 data_length;                                   /* Data length in bytes. */
+            le32 reservedV;                                     /* Reserved (zero). */
         } __attribute__ ((__packed__));
     } __attribute__ ((__packed__));
-    /*  8*/ le16 length; /* Byte size of this index entry, multiple of
-                8-bytes. Size includes INDEX_ENTRY_HEADER
-                and the optional subnode VCN. See below. */
-    /* 10*/ le16 key_length; /* Byte size of the key value, which is in the
-                index entry. It follows field reserved. Not
-                multiple of 8-bytes. */
-    /* 12*/ INDEX_ENTRY_FLAGS ie_flags; /* Bit field of INDEX_ENTRY_* flags. */
-    /* 14*/ le16 reserved; /* Reserved/align to 8-byte boundary. */
+    /*  8*/ le16 length;                                        /* Byte size of this index entry, multiple of 8-bytes.
+                                                                 * Size includes INDEX_ENTRY_HEADER and the optional subnode VCN.
+                                                                 * See below. */
+    /* 10*/ le16 key_length;                                    /* Byte size of the key value, which is in the index entry.
+                                                                 * It follows field reserved. Not multiple of 8-bytes. */
+    /* 12*/ INDEX_ENTRY_FLAGS ie_flags;                         /* Bit field of INDEX_ENTRY_* flags. */
+    /* 14*/ le16 reserved;                                      /* Reserved/align to 8-byte boundary. */
     /*    End of INDEX_ENTRY_HEADER */
     /* 16*/ union
-    { /* The key of the indexed attribute. NOTE: Only present
+    {
+      /* The key of the indexed attribute. NOTE: Only present
 if INDEX_ENTRY_END bit in flags is not set. NOTE: On
 NTFS versions before 3.0 the only valid key is the
 FILE_NAME_ATTR. On NTFS 3.0+ the following
 additional index keys are defined: */
-        FILE_NAME_ATTR file_name; /* $I30 index in directories. */
-        SII_INDEX_KEY sii; /* $SII index in $Secure. */
-        SDH_INDEX_KEY sdh; /* $SDH index in $Secure. */
-        GUID object_id; /* $O index in FILE_Extend/$ObjId: The
-                object_id of the mft record found in
-                the data part of the index. */
-        REPARSE_INDEX_KEY reparse; /* $R index in
-                        FILE_Extend/$Reparse. */
-        SID sid; /* $O index in FILE_Extend/$Quota:
-                SID of the owner of the user_id. */
-        le32 owner_id; /* $Q index in FILE_Extend/$Quota:
-                user_id of the owner of the quota
-                control entry in the data part of
-                the index. */
+        FILE_NAME_ATTR file_name;                               /* $I30 index in directories. */
+        SII_INDEX_KEY sii;                                      /* $SII index in $Secure. */
+        SDH_INDEX_KEY sdh;                                      /* $SDH index in $Secure. */
+        GUID object_id;                                         /* $O index in FILE_Extend/$ObjId: The object_id of the mft record found in the data part of the index. */
+        REPARSE_INDEX_KEY reparse;                              /* $R index in FILE_Extend/$Reparse. */
+        SID sid;                                                /* $O index in FILE_Extend/$Quota: SID of the owner of the user_id. */
+        le32 owner_id;                                          /* $Q index in FILE_Extend/$Quota: user_id of the owner of the quota control entry in the data part of the index. */
     } __attribute__ ((__packed__)) key;
     /* The (optional) index data is inserted here when creating.
     leVCN vcn;       If INDEX_ENTRY_NODE bit in ie_flags is set, the last
@@ -2383,40 +2387,40 @@ typedef struct
  */
 typedef enum
 {
-    IO_REPARSE_TAG_DIRECTORY = const_cpu_to_le32 (0x10000000),
-    IO_REPARSE_TAG_IS_ALIAS = const_cpu_to_le32 (0x20000000),
-    IO_REPARSE_TAG_IS_HIGH_LATENCY = const_cpu_to_le32 (0x40000000),
-    IO_REPARSE_TAG_IS_MICROSOFT = const_cpu_to_le32 (0x80000000),
+    IO_REPARSE_TAG_DIRECTORY          = const_cpu_to_le32 (0x10000000),
+    IO_REPARSE_TAG_IS_ALIAS           = const_cpu_to_le32 (0x20000000),
+    IO_REPARSE_TAG_IS_HIGH_LATENCY    = const_cpu_to_le32 (0x40000000),
+    IO_REPARSE_TAG_IS_MICROSOFT       = const_cpu_to_le32 (0x80000000),
 
-    IO_REPARSE_TAG_RESERVED_ZERO = const_cpu_to_le32 (0x00000000),
-    IO_REPARSE_TAG_RESERVED_ONE = const_cpu_to_le32 (0x00000001),
-    IO_REPARSE_TAG_RESERVED_RANGE = const_cpu_to_le32 (0x00000001),
+    IO_REPARSE_TAG_RESERVED_ZERO      = const_cpu_to_le32 (0x00000000),
+    IO_REPARSE_TAG_RESERVED_ONE       = const_cpu_to_le32 (0x00000001),
+    IO_REPARSE_TAG_RESERVED_RANGE     = const_cpu_to_le32 (0x00000001),
 
-    IO_REPARSE_TAG_CSV = const_cpu_to_le32 (0x80000009),
-    IO_REPARSE_TAG_DEDUP = const_cpu_to_le32 (0x80000013),
-    IO_REPARSE_TAG_DFS = const_cpu_to_le32 (0x8000000A),
-    IO_REPARSE_TAG_DFSR = const_cpu_to_le32 (0x80000012),
-    IO_REPARSE_TAG_HSM = const_cpu_to_le32 (0xC0000004),
-    IO_REPARSE_TAG_HSM2 = const_cpu_to_le32 (0x80000006),
-    IO_REPARSE_TAG_MOUNT_POINT = const_cpu_to_le32 (0xA0000003),
-    IO_REPARSE_TAG_NFS = const_cpu_to_le32 (0x80000014),
-    IO_REPARSE_TAG_SIS = const_cpu_to_le32 (0x80000007),
-    IO_REPARSE_TAG_SYMLINK = const_cpu_to_le32 (0xA000000C),
-    IO_REPARSE_TAG_WIM = const_cpu_to_le32 (0x80000008),
-    IO_REPARSE_TAG_DFM = const_cpu_to_le32 (0x80000016),
-    IO_REPARSE_TAG_WOF = const_cpu_to_le32 (0x80000017),
-    IO_REPARSE_TAG_WCI = const_cpu_to_le32 (0x80000018),
-    IO_REPARSE_TAG_CLOUD = const_cpu_to_le32 (0x9000001A),
-    IO_REPARSE_TAG_APPEXECLINK = const_cpu_to_le32 (0x8000001B),
-    IO_REPARSE_TAG_GVFS = const_cpu_to_le32 (0x9000001C),
-    IO_REPARSE_TAG_LX_SYMLINK = const_cpu_to_le32 (0xA000001D),
-    IO_REPARSE_TAG_AF_UNIX = const_cpu_to_le32 (0x80000023),
-    IO_REPARSE_TAG_LX_FIFO = const_cpu_to_le32 (0x80000024),
-    IO_REPARSE_TAG_LX_CHR = const_cpu_to_le32 (0x80000025),
-    IO_REPARSE_TAG_LX_BLK = const_cpu_to_le32 (0x80000026),
+    IO_REPARSE_TAG_CSV                = const_cpu_to_le32 (0x80000009),
+    IO_REPARSE_TAG_DEDUP              = const_cpu_to_le32 (0x80000013),
+    IO_REPARSE_TAG_DFS                = const_cpu_to_le32 (0x8000000A),
+    IO_REPARSE_TAG_DFSR               = const_cpu_to_le32 (0x80000012),
+    IO_REPARSE_TAG_HSM                = const_cpu_to_le32 (0xC0000004),
+    IO_REPARSE_TAG_HSM2               = const_cpu_to_le32 (0x80000006),
+    IO_REPARSE_TAG_MOUNT_POINT        = const_cpu_to_le32 (0xA0000003),
+    IO_REPARSE_TAG_NFS                = const_cpu_to_le32 (0x80000014),
+    IO_REPARSE_TAG_SIS                = const_cpu_to_le32 (0x80000007),
+    IO_REPARSE_TAG_SYMLINK            = const_cpu_to_le32 (0xA000000C),
+    IO_REPARSE_TAG_WIM                = const_cpu_to_le32 (0x80000008),
+    IO_REPARSE_TAG_DFM                = const_cpu_to_le32 (0x80000016),
+    IO_REPARSE_TAG_WOF                = const_cpu_to_le32 (0x80000017),
+    IO_REPARSE_TAG_WCI                = const_cpu_to_le32 (0x80000018),
+    IO_REPARSE_TAG_CLOUD              = const_cpu_to_le32 (0x9000001A),
+    IO_REPARSE_TAG_APPEXECLINK        = const_cpu_to_le32 (0x8000001B),
+    IO_REPARSE_TAG_GVFS               = const_cpu_to_le32 (0x9000001C),
+    IO_REPARSE_TAG_LX_SYMLINK         = const_cpu_to_le32 (0xA000001D),
+    IO_REPARSE_TAG_AF_UNIX            = const_cpu_to_le32 (0x80000023),
+    IO_REPARSE_TAG_LX_FIFO            = const_cpu_to_le32 (0x80000024),
+    IO_REPARSE_TAG_LX_CHR             = const_cpu_to_le32 (0x80000025),
+    IO_REPARSE_TAG_LX_BLK             = const_cpu_to_le32 (0x80000026),
 
-    IO_REPARSE_TAG_VALID_VALUES = const_cpu_to_le32 (0xf000ffff),
-    IO_REPARSE_PLUGIN_SELECT = const_cpu_to_le32 (0xffff0fff),
+    IO_REPARSE_TAG_VALID_VALUES       = const_cpu_to_le32 (0xf000ffff),
+    IO_REPARSE_PLUGIN_SELECT          = const_cpu_to_le32 (0xffff0fff),
 } PREDEFINED_REPARSE_TAGS;
 
 /**
@@ -2426,10 +2430,10 @@ typedef enum
  */
 typedef struct
 {
-    le32 reparse_tag; /* Reparse point type (inc. flags). */
-    le16 reparse_data_length; /* Byte size of reparse data. */
-    le16 reserved; /* Align to 8-byte boundary. */
-    u8 reparse_data[0]; /* Meaning depends on reparse_tag. */
+    le32 reparse_tag;                               /* Reparse point type (inc. flags). */
+    le16 reparse_data_length;                       /* Byte size of reparse data. */
+    le16 reserved;                                  /* Align to 8-byte boundary. */
+    u8 reparse_data[0];                             /* Meaning depends on reparse_tag. */
 } __attribute__ ((__packed__)) REPARSE_POINT;
 
 /**
@@ -2439,15 +2443,11 @@ typedef struct
  */
 typedef struct
 {
-    le16 ea_length; /* Byte size of the packed extended
-            attributes. */
-    le16 need_ea_count; /* The number of extended attributes which have
-                the NEED_EA bit set. */
-    le32 ea_query_length; /* Byte size of the buffer required to query
-                the extended attributes when calling
-                ZwQueryEaFile() in Windows NT/2k. I.e. the
-                byte size of the unpacked extended
-                attributes. */
+    le16 ea_length;                                 /* Byte size of the packed extended attributes. */
+    le16 need_ea_count;                             /* The number of extended attributes which have the NEED_EA bit set. */
+    le32 ea_query_length;                           /**
+                                                     * Byte size of the buffer required to query the extended attributes when calling ZwQueryEaFile() in Windows NT/2k.
+                                                     * I.e. the byte size of the unpacked extended attributes. */
 } __attribute__ ((__packed__)) EA_INFORMATION;
 
 /**
@@ -2455,10 +2455,7 @@ typedef struct
  */
 typedef enum
 {
-    NEED_EA = 0x80, /* Indicate that the file to which the EA
-         belongs cannot be interpreted without
-         understanding the associated extended
-         attributes. */
+    NEED_EA = 0x80,                                 /* Indicate that the file to which the EA belongs cannot be interpreted without understanding the associated extended attributes. */
 } __attribute__ ((__packed__)) EA_FLAGS;
 
 /**
@@ -2472,14 +2469,12 @@ typedef enum
  */
 typedef struct
 {
-    le32 next_entry_offset; /* Offset to the next EA_ATTR. */
-    EA_FLAGS flags; /* Flags describing the EA. */
-    u8 name_length; /* Length of the name of the extended
-            attribute in bytes. */
-    le16 value_length; /* Byte size of the EA's value. */
-    u8 name[0]; /* Name of the EA. */
-    u8 value[0]; /* The value of the EA. Immediately
-            follows the name. */
+    le32 next_entry_offset;                         /* Offset to the next EA_ATTR. */
+    EA_FLAGS flags;                                 /* Flags describing the EA. */
+    u8 name_length;                                 /* Length of the name of the extended attribute in bytes. */
+    le16 value_length;                              /* Byte size of the EA's value. */
+    u8 name[0];                                     /* Name of the EA. */
+    u8 value[0];                                    /* The value of the EA. Immediately follows the name. */
 } __attribute__ ((__packed__)) EA_ATTR;
 
 /**
@@ -2543,24 +2538,20 @@ typedef struct
  */
 typedef struct
 {
-    /*  0*/ le32 length; /* Length of EFS attribute in bytes. */
-    le32 state; /* Always 0? */
-    le32 version; /* Efs version.  Always 2? */
-    le32 crypto_api_version; /* Always 0? */
-    /* 16*/ u8 unknown4[16]; /* MD5 hash of decrypted FEK?  This field is
-                 created with a call to UuidCreate() so is
-                 unlikely to be an MD5 hash and is more
-                 likely to be GUID of this encrytped file
-                 or something like that. */
-    /* 32*/ u8 unknown5[16]; /* MD5 hash of DDFs? */
-    /* 48*/ u8 unknown6[16]; /* MD5 hash of DRFs? */
-    /* 64*/ le32 offset_to_ddf_array; /* Offset in bytes to the array of data
-                     decryption fields (DDF), see below.  Zero if
-                     no DDFs are present. */
-    le32 offset_to_drf_array; /* Offset in bytes to the array of data
-                    recovery fields (DRF), see below.  Zero if
-                    no DRFs are present. */
-    le32 reserved; /* Reserved. */
+    /*  0*/ le32 length;                                  /* Length of EFS attribute in bytes. */
+    le32 state;                                           /* Always 0? */
+    le32 version;                                         /* Efs version.  Always 2? */
+    le32 crypto_api_version;                              /* Always 0? */
+    /* 16*/ u8 unknown4[16];                              /* MD5 hash of decrypted FEK?
+                                                           * This field is created with a call to UuidCreate() so is unlikely to be an MD5 hash and is more
+                                                           * likely to be GUID of this encrytped file or something like that. */
+    /* 32*/ u8 unknown5[16];                              /* MD5 hash of DDFs? */
+    /* 48*/ u8 unknown6[16];                              /* MD5 hash of DRFs? */
+    /* 64*/ le32 offset_to_ddf_array;                     /* Offset in bytes to the array of data decryption fields (DDF), see below.
+                                                           * Zero if no DDFs are present. */
+    le32 offset_to_drf_array;                             /* Offset in bytes to the array of data recovery fields (DRF), see below.
+                                                           * Zero if no DRFs are present. */
+    le32 reserved;                                        /* Reserved. */
 } __attribute__ ((__packed__)) EFS_ATTR_HEADER;
 
 /**
@@ -2568,8 +2559,7 @@ typedef struct
  */
 typedef struct
 {
-    le32 df_count; /* Number of data decryption/recovery fields in
-            the array. */
+    le32 df_count;                                        /* Number of data decryption/recovery fields in the array. */
 } __attribute__ ((__packed__)) EFS_DF_ARRAY_HEADER;
 
 /**
@@ -2577,14 +2567,11 @@ typedef struct
  */
 typedef struct
 {
-    /*  0*/ le32 df_length; /* Length of this data decryption/recovery
-             field in bytes. */
-    le32 cred_header_offset; /* Offset in bytes to the credential header. */
-    le32 fek_size; /* Size in bytes of the encrypted file
-            encryption key (FEK). */
-    le32 fek_offset; /* Offset in bytes to the FEK from the start of
-            the data decryption/recovery field. */
-    /* 16*/ le32 unknown1; /* always 0?  Might be just padding. */
+    /*  0*/ le32 df_length;                               /* Length of this data decryption/recovery field in bytes. */
+    le32 cred_header_offset;                              /* Offset in bytes to the credential header. */
+    le32 fek_size;                                        /* Size in bytes of the encrypted file encryption key (FEK). */
+    le32 fek_offset;                                      /* Offset in bytes to the FEK from the start of the data decryption/recovery field. */
+    /* 16*/ le32 unknown1;                                /* always 0?  Might be just padding. */
 } __attribute__ ((__packed__)) EFS_DF_HEADER;
 
 /**
@@ -2592,43 +2579,30 @@ typedef struct
  */
 typedef struct
 {
-    /*  0*/ le32 cred_length; /* Length of this credential in bytes. */
-    le32 sid_offset; /* Offset in bytes to the user's sid from start
-            of this structure.  Zero if no sid is
-            present. */
-    /*  8*/ le32 type; /* Type of this credential:
-              1 = CryptoAPI container.
-              2 = Unexpected type.
-              3 = Certificate thumbprint.
-              other = Unknown type. */
+    /*  0*/ le32 cred_length;                             /* Length of this credential in bytes. */
+    le32 sid_offset;                                      /* Offset in bytes to the user's sid from start of this structure.  Zero if no sid is present. */
+    /*  8*/ le32 type;                                    /* Type of this credential:
+                                                           *  1 = CryptoAPI container.
+                                                           *  2 = Unexpected type.
+                                                           *  3 = Certificate thumbprint.
+                                                           * other = Unknown type. */
     union
     {
         /* CryptoAPI container. */
         struct
         {
-            /* 12*/ le32 container_name_offset; /* Offset in bytes to
-                 the name of the container from start of this
-                 structure (may not be zero). */
-            /* 16*/ le32 provider_name_offset; /* Offset in bytes to
-                 the name of the provider from start of this
-                 structure (may not be zero). */
-            le32 public_key_blob_offset; /* Offset in bytes to
-                the public key blob from start of this
-                structure. */
-            /* 24*/ le32 public_key_blob_size; /* Size in bytes of
-                 public key blob. */
+            /* 12*/ le32 container_name_offset;           /* Offset in bytes to the name of the container from start of this structure (may not be zero). */
+            /* 16*/ le32 provider_name_offset;            /* Offset in bytes to the name of the provider from start of this structure (may not be zero). */
+            le32 public_key_blob_offset;                  /* Offset in bytes to the public key blob from start of this structure. */
+            /* 24*/ le32 public_key_blob_size;            /* Size in bytes of public key blob. */
         } __attribute__ ((__packed__));
         /* Certificate thumbprint. */
         struct
         {
-            /* 12*/ le32 cert_thumbprint_header_size; /* Size in
-                 bytes of the header of the certificate
-                 thumbprint. */
-            /* 16*/ le32 cert_thumbprint_header_offset; /* Offset in
-                 bytes to the header of the certificate
-                 thumbprint from start of this structure. */
-            le32 unknown1; /* Always 0?  Might be padding... */
-            le32 unknown2; /* Always 0?  Might be padding... */
+            /* 12*/ le32 cert_thumbprint_header_size;     /* Size in bytes of the header of the certificate thumbprint. */
+            /* 16*/ le32 cert_thumbprint_header_offset;   /* Offset in bytes to the header of the certificate thumbprint from start of this structure. */
+            le32 unknown1;                                /* Always 0?  Might be padding... */
+            le32 unknown2;                                /* Always 0?  Might be padding... */
         } __attribute__ ((__packed__));
     } __attribute__ ((__packed__));
 } __attribute__ ((__packed__)) EFS_DF_CREDENTIAL_HEADER;
@@ -2640,41 +2614,31 @@ typedef EFS_DF_CREDENTIAL_HEADER EFS_DF_CRED_HEADER;
  */
 typedef struct
 {
-    /*  0*/ le32 thumbprint_offset; /* Offset in bytes to the thumbprint. */
-    le32 thumbprint_size; /* Size of thumbprint in bytes. */
-    /*  8*/ le32 container_name_offset; /* Offset in bytes to the name of the
-                     container from start of this
-                     structure or 0 if no name present. */
-    le32 provider_name_offset; /* Offset in bytes to the name of the
-                    cryptographic provider from start of
-                    this structure or 0 if no name
-                    present. */
-    /* 16*/ le32 user_name_offset; /* Offset in bytes to the user name
-                 from start of this structure or 0 if
-                 no user name present.  (This is also
-                 known as lpDisplayInformation.) */
+    /*  0*/ le32 thumbprint_offset;                       /* Offset in bytes to the thumbprint. */
+    le32 thumbprint_size;                                 /* Size of thumbprint in bytes. */
+    /*  8*/ le32 container_name_offset;                   /* Offset in bytes to the name of the container from start of this structure or 0 if no name present. */
+    le32 provider_name_offset;                            /* Offset in bytes to the name of the cryptographic provider from start of this structure or 0 if no name present. */
+    /* 16*/ le32 user_name_offset;                        /* Offset in bytes to the user name from start of this structure or 0 if no user name present.  (This is also known as lpDisplayInformation.) */
 } __attribute__ ((__packed__)) EFS_DF_CERTIFICATE_THUMBPRINT_HEADER;
 
 typedef EFS_DF_CERTIFICATE_THUMBPRINT_HEADER EFS_DF_CERT_THUMBPRINT_HEADER;
 
 typedef enum
 {
-    INTX_SYMBOLIC_LINK = const_cpu_to_le64 (0x014B4E4C78746E49ULL), /* "IntxLNK\1" */
-    INTX_CHARACTER_DEVICE = const_cpu_to_le64 (0x0052484378746E49ULL), /* "IntxCHR\0" */
-    INTX_BLOCK_DEVICE = const_cpu_to_le64 (0x004B4C4278746E49ULL), /* "IntxBLK\0" */
+    INTX_SYMBOLIC_LINK = const_cpu_to_le64 (0x014B4E4C78746E49ULL),     /* "IntxLNK\1" */
+    INTX_CHARACTER_DEVICE = const_cpu_to_le64 (0x0052484378746E49ULL),  /* "IntxCHR\0" */
+    INTX_BLOCK_DEVICE = const_cpu_to_le64 (0x004B4C4278746E49ULL),      /* "IntxBLK\0" */
 } INTX_FILE_TYPES;
 
 typedef struct
 {
-    INTX_FILE_TYPES magic; /* Intx file magic. */
-    union
-    {
+    INTX_FILE_TYPES magic;                              /* Intx file magic. */
+    union {
         /* For character and block devices. */
-        struct
-        {
-            le64 major; /* Major device number. */
-            le64 minor; /* Minor device number. */
-            void *device_end[0]; /* Marker for offsetof(). */
+        struct {
+            le64 major;                                 /* Major device number. */
+            le64 minor;                                 /* Minor device number. */
+            void *device_end[0];                        /* Marker for offsetof(). */
         } __attribute__ ((__packed__));
         /* For symbolic links. */
         ntfschar target[0];

@@ -903,8 +903,9 @@ static int cmp_inodes(ntfs_volume *vol1, ntfs_volume *vol2)
     int pb_flags = 0;    /* progress bar flags */
     u64 nr_mft_records, nr_mft_records2;
 
-    if (opt.show_progress)
+    if (opt.show_progress) {
         pb_flags |= NTFS_PROGBAR;
+    }
 
     nr_mft_records  = get_nr_mft_records(vol1);
     nr_mft_records2 = get_nr_mft_records(vol2);
@@ -957,8 +958,7 @@ static ntfs_volume *mount_volume(const char *volume)
 
     if (ntfs_check_if_mounted(volume, &mntflag)) {
         perr_println("Failed to check '%s' mount state", volume);
-        printf("Probably /etc/mtab is missing. It's too risky to "
-               "continue. You might try\nan another Linux distro.\n");
+        printf("Probably /etc/mtab is missing. It's too risky to continue. You might try\nan another Linux distro.\n");
         exit(1);
     }
 

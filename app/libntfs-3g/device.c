@@ -325,8 +325,7 @@ out:
  * sector transfer error. This should be detected by the caller by checking for
  * the magic being "BAAD".
  */
-s64 ntfs_mst_pread(struct ntfs_device *dev, const s64 pos, s64 count,
-        const u32 bksize, void *b)
+s64 ntfs_mst_pread(struct ntfs_device *dev, const s64 pos, s64 count, const u32 bksize, void *b)
 {
     s64 br, i;
 
@@ -336,8 +335,10 @@ s64 ntfs_mst_pread(struct ntfs_device *dev, const s64 pos, s64 count,
     }
     /* Do the read. */
     br = ntfs_pread(dev, pos, count * bksize, b);
-    if (br < 0)
+    if (br < 0) {
         return br;
+    }
+
     /*
      * Apply fixups to successfully read data, disregarding any errors
      * returned from the MST fixup function. This is because we want to
@@ -345,9 +346,10 @@ s64 ntfs_mst_pread(struct ntfs_device *dev, const s64 pos, s64 count,
      * magic will be detected later on.
      */
     count = br / bksize;
-    for (i = 0; i < count; ++i)
-        ntfs_mst_post_read_fixup((NTFS_RECORD*)
-                ((u8*)b + i * bksize), bksize);
+    for (i = 0; i < count; ++i) {
+        ntfs_mst_post_read_fixup((NTFS_RECORD*) ((u8*)b + i * bksize), bksize);
+    }
+
     /* Finally, return the number of complete blocks read. */
     return count;
 }
