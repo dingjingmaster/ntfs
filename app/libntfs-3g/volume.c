@@ -498,8 +498,7 @@ error_exit:
  * Return the allocated volume structure on success and NULL on error with
  * errno set to the error code.
  */
-ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev,
-        ntfs_mount_flags flags)
+ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev, ntfs_mount_flags flags)
 {
     LCN mft_zone_size, mft_lcn;
     s64 br;
@@ -514,49 +513,55 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev,
     }
 
     bs = ntfs_malloc(sizeof(NTFS_BOOT_SECTOR));
-    if (!bs)
+    if (!bs) {
         return NULL;
+    }
 
     /* Allocate the volume structure. */
     vol = ntfs_volume_alloc();
-    if (!vol)
+    if (!vol) {
         goto error_exit;
+    }
 
     /* Create the default upcase table. */
     vol->upcase_len = ntfs_upcase_build_default(&vol->upcase);
-    if (!vol->upcase_len || !vol->upcase)
+    if (!vol->upcase_len || !vol->upcase) {
         goto error_exit;
+    }
 
     /* Default with no locase table and case sensitive file names */
     vol->locase = (ntfschar*)NULL;
     NVolSetCaseSensitive(vol);
 
-        /* by default, all files are shown and not marked hidden */
+    /* by default, all files are shown and not marked hidden */
     NVolSetShowSysFiles(vol);
     NVolSetShowHidFiles(vol);
     NVolClearHideDotFiles(vol);
-        /* set default compression */
+
+    /* set default compression */
 #if DEFAULT_COMPRESSION
     NVolSetCompression(vol);
 #else
     NVolClearCompression(vol);
 #endif
-    if (flags & NTFS_MNT_RDONLY)
+
+    if (flags & NTFS_MNT_RDONLY) {
         NVolSetReadOnly(vol);
+    }
 
     /* ...->open needs bracketing to compile with glibc 2.7 */
     if ((dev->d_ops->open)(dev, NVolReadOnly(vol) ? O_RDONLY: O_RDWR)) {
         if (!NVolReadOnly(vol) && (errno == EROFS)) {
             if ((dev->d_ops->open)(dev, O_RDONLY)) {
-                ntfs_log_perror("Error opening read-only '%s'",
-                        dev->d_name);
+                ntfs_log_perror("Error opening read-only '%s'", dev->d_name);
                 goto error_exit;
-            } else {
-                ntfs_log_info("Error opening '%s' read-write\n",
-                        dev->d_name);
+            }
+            else {
+                ntfs_log_info("Error opening '%s' read-write\n", dev->d_name);
                 NVolSetReadOnly(vol);
             }
-        } else {
+        }
+        else {
             ntfs_log_perror("Error opening '%s'", dev->d_name);
             goto error_exit;
         }
@@ -567,29 +572,32 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev,
     /* Now read the bootsector. */
     br = ntfs_pread(dev, 0, sizeof(NTFS_BOOT_SECTOR), bs);
     if (br != sizeof(NTFS_BOOT_SECTOR)) {
-        if (br != -1)
+        if (br != -1) {
             errno = EINVAL;
-        if (!br)
+        }
+        if (!br) {
             ntfs_log_error("Failed to read bootsector (size=0)\n");
-        else
+        }
+        else {
             ntfs_log_perror("Error reading bootsector");
+        }
         goto error_exit;
     }
     if (!ntfs_boot_sector_is_ntfs(bs)) {
         errno = EINVAL;
         goto error_exit;
     }
-    if (ntfs_boot_sector_parse(vol, bs) < 0)
+    if (ntfs_boot_sector_parse(vol, bs) < 0) {
         goto error_exit;
+    }
 
     free(bs);
     bs = NULL;
+
     /* Now set the device block size to the sector size. */
-    if (ntfs_device_block_size_set(vol->dev, vol->sector_size))
-        ntfs_log_debug("Failed to set the device block size to the "
-                "sector size.  This may affect performance "
-                "but should be harmless otherwise.  Error: "
-                "%s\n", strerror(errno));
+    if (ntfs_device_block_size_set(vol->dev, vol->sector_size)) {
+        ntfs_log_debug("Failed to set the device block size to the sector size.  This may affect performance but should be harmless otherwise.  Error: %s\n", strerror(errno));
+    }
 
     /* We now initialize the cluster allocator. */
     vol->full_zones = 0;
@@ -609,14 +617,17 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev,
      * higher than the speed increase we would get by doing it.
      */
     mft_lcn = (8192 + 2 * vol->cluster_size - 1) / vol->cluster_size;
-    if (mft_lcn * vol->cluster_size < 16 * 1024)
-        mft_lcn = (16 * 1024 + vol->cluster_size - 1) /
-                vol->cluster_size;
-    if (vol->mft_zone_start <= mft_lcn)
+    if (mft_lcn * vol->cluster_size < 16 * 1024) {
+        mft_lcn = (16 * 1024 + vol->cluster_size - 1) / vol->cluster_size;
+    }
+
+    if (vol->mft_zone_start <= mft_lcn) {
         vol->mft_zone_start = 0;
+    }
+
     ntfs_log_debug("mft_zone_start = 0x%llx\n", (long long)vol->mft_zone_start);
 
-    /*
+    /**
      * Need to cap the mft zone on non-standard volumes so that it does
      * not point outside the boundaries of the volume. We do this by
      * halving the zone size until we are inside the volume.
@@ -632,7 +643,7 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev,
     }
     ntfs_log_debug("mft_zone_end = 0x%llx\n", (long long)vol->mft_zone_end);
 
-    /*
+    /**
      * Set the current position within each data zone to the start of the
      * respective zone.
      */
@@ -644,7 +655,7 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev,
     /* Set the mft data allocation position to mft record 24. */
     vol->mft_data_pos = 24;
 
-    /*
+    /**
      * The cluster allocator is now fully operational.
      */
 
@@ -659,13 +670,17 @@ ntfs_volume *ntfs_volume_startup(struct ntfs_device *dev,
         ntfs_log_perror("Failed to load $MFTMirr");
         goto error_exit;
     }
+
     return vol;
+
 error_exit:
     eo = errno;
     free(bs);
-    if (vol)
+    if (vol) {
         __ntfs_volume_release(vol);
+    }
     errno = eo;
+
     return NULL;
 }
 
@@ -1421,8 +1436,7 @@ int ntfs_set_ignore_case(ntfs_volume *vol)
  * Note, that a copy is made of @name, and hence it can be discarded as
  * soon as the function returns.
  */
-ntfs_volume *ntfs_mount(const char *name __attribute__((unused)),
-        ntfs_mount_flags flags __attribute__((unused)))
+ntfs_volume *ntfs_mount(const char *name __attribute__((unused)), ntfs_mount_flags flags __attribute__((unused)))
 {
 #ifndef NO_NTFS_DEVICE_DEFAULT_IO_OPS
     struct ntfs_device *dev;
@@ -1430,16 +1444,20 @@ ntfs_volume *ntfs_mount(const char *name __attribute__((unused)),
 
     /* Allocate an ntfs_device structure. */
     dev = ntfs_device_alloc(name, 0, &ntfs_device_default_io_ops, NULL);
-    if (!dev)
+    if (!dev) {
         return NULL;
+    }
+
     /* Call ntfs_device_mount() to do the actual mount. */
     vol = ntfs_device_mount(dev, flags);
     if (!vol) {
         int eo = errno;
         ntfs_device_free(dev);
         errno = eo;
-    } else
+    }
+    else {
         ntfs_create_lru_caches(vol);
+    }
     return vol;
 #else
     /*

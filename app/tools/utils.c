@@ -137,8 +137,7 @@ int utils_set_locale(void)
 	locale = setlocale(LC_ALL, "");
 	if (!locale) {
 		locale = setlocale(LC_ALL, NULL);
-		ntfs_log_error("Failed to set locale, using default '%s'.\n",
-				locale);
+		ntfs_log_error("Failed to set locale, using default '%s'.\n", locale);
 		return 1;
 	} else {
 		return 0;
